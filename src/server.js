@@ -3,6 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const pool = require('./config/database');
+const barbeiroRoutes = require('./routes/barbeiroRoutes');
 
 const app = express();
 
@@ -12,6 +13,8 @@ app.use(express.json());
 app.get('/', (req, res) => {
   res.json({ mensagem: 'API da barbearia rodando com sucesso!' });
 });
+
+app.use('/barbeiros', barbeiroRoutes);
 
 app.get('/teste-banco', async (req, res) => {
   try {
