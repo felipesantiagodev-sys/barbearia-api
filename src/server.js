@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const pool = require('./config/database');
 const barbeiroRoutes = require('./routes/barbeiroRoutes');
+const servicoRoutes = require('./routes/servicoRoutes');
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/barbeiros', barbeiroRoutes);
+app.use('/servicos', servicoRoutes);
 
 app.get('/teste-banco', async (req, res) => {
   try {
