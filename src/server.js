@@ -5,6 +5,10 @@ require('dotenv').config();
 const pool = require('./config/database');
 const barbeiroRoutes = require('./routes/barbeiroRoutes');
 const servicoRoutes = require('./routes/servicoRoutes');
+const barbeariaRoutes = require('./routes/barbeariaRoutes');
+const unidadeRoutes = require('./routes/unidadeRoutes');
+const planoRoutes = require('./routes/planoRoutes');
+const clienteRoutes = require('./routes/clienteRoutes');
 
 const app = express();
 
@@ -15,8 +19,12 @@ app.get('/', (req, res) => {
   res.json({ mensagem: 'API da barbearia rodando com sucesso!' });
 });
 
+app.use('/barbearias', barbeariaRoutes);
+app.use('/unidades', unidadeRoutes);
 app.use('/barbeiros', barbeiroRoutes);
 app.use('/servicos', servicoRoutes);
+app.use('/planos', planoRoutes);
+app.use('/clientes', clienteRoutes);
 
 app.get('/teste-banco', async (req, res) => {
   try {
