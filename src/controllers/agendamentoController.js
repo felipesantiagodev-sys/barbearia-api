@@ -197,5 +197,48 @@ async function cancelarAgendamento(req, res) {
     res.status(500).json({ erro: 'Erro ao cancelar agendamento' });
   }
 }
+async function concluirAgendamento(req, res) {
+  const { id } = req.params;
 
-module.exports = { listarHorariosDisponiveis, criarAgendamento, cancelarAgendamento };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const agendamentoResultado = await client.query(
+      `UPDATE agendamento SET status = 'concluido'
+       WHERE id = $1 AND status = 'confirmado'
+       RETURNING *`,
+      [id]
+    );
+
+    if (agendamentoResultado.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Agendamento não encontrado ou não pode ser concluído' });
+    }
+
+    const itensResultado = await client.query(
+      'SELECT SUM(valor_cobrado) AS total FROM agendamento_servico WHERE agendamento_id = $1',
+      [id]
+    );
+    const valorTotal = Number(itensResultado.rows[0].total) || 0;
+
+    if (valorTotal > 0) {
+      await client.query(
+        `INSERT INTO pagamento (agendamento_id, valor, status)
+         VALUES ($1, $2, 'pago')`,
+        [id, valorTotal]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ ...agendamentoResultado.rows[0], valor_pago: valorTotal });
+  } catch (erro) {
+    await client.query('ROLLBACK');
+    console.error(erro);
+    res.status(500).json({ erro: 'Erro ao concluir agendamento' });
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { listarHorariosDisponiveis, criarAgendamento, cancelarAgendamento,concluirAgendamento };
