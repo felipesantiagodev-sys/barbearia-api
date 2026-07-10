@@ -9,6 +9,7 @@ const barbeariaRoutes = require('./routes/barbeariaRoutes');
 const unidadeRoutes = require('./routes/unidadeRoutes');
 const planoRoutes = require('./routes/planoRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
+const agendamentoRoutes = require('./routes/agendamentoRoutes');
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use('/barbeiros', barbeiroRoutes);
 app.use('/servicos', servicoRoutes);
 app.use('/planos', planoRoutes);
 app.use('/clientes', clienteRoutes);
+app.use('/agendamentos', agendamentoRoutes);
 
 app.get('/teste-banco', async (req, res) => {
   try {
