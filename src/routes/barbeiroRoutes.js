@@ -10,17 +10,18 @@ const {
   listarDisponibilidade,
   listarServicosDoBarbeiro,
 } = require('../controllers/barbeiroController');
+const { verificarToken, apenasAdmin } = require('../middlewares/autenticacao');
 
 router.get('/', listarBarbeiros);
-router.post('/', criarBarbeiro);
+router.post('/', verificarToken, apenasAdmin, criarBarbeiro);
 
 router.get('/:id/disponibilidade', listarDisponibilidade);
-router.post('/:id/disponibilidade', definirDisponibilidade);
+router.post('/:id/disponibilidade', verificarToken, apenasAdmin, definirDisponibilidade);
 
 router.get('/:id/servicos', listarServicosDoBarbeiro);
-router.post('/:id/servicos', associarServicos);
+router.post('/:id/servicos', verificarToken, apenasAdmin, associarServicos);
 
 router.get('/:id/excecoes', listarExcecoes);
-router.post('/:id/excecoes', criarExcecao);
+router.post('/:id/excecoes', verificarToken, apenasAdmin, criarExcecao);
 
 module.exports = router;
