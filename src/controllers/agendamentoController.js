@@ -157,6 +157,12 @@ async function criarAgendamento(req, res) {
       itens.push(itemResultado.rows[0]);
     }
 
+    // Cria a notificação de lembrete pendente para esse novo agendamento
+    await client.query(
+      `INSERT INTO notificacao (agendamento_id, tipo, status) VALUES ($1, 'lembrete_1_dia', 'pendente')`,
+      [agendamento.id]
+    );
+
     await client.query('COMMIT');
 
     const valorTotal = itens.reduce((soma, item) => soma + Number(item.valor_cobrado), 0);
@@ -197,6 +203,12 @@ async function cancelarAgendamento(req, res) {
     if (resultado.rows.length === 0) {
       return res.status(404).json({ erro: 'Agendamento não pode mais ser cancelado' });
     }
+
+    // Cancela o lembrete pendente, já que esse agendamento não vai mais acontecer
+    await pool.query(
+      `UPDATE notificacao SET status = 'cancelado' WHERE agendamento_id = $1 AND status = 'pendente'`,
+      [id]
+    );
 
     res.json(resultado.rows[0]);
   } catch (erro) {
@@ -310,6 +322,18 @@ async function reagendarAgendamento(req, res) {
       );
       itens.push(itemResultado.rows[0]);
     }
+
+    // Notificação nova para o agendamento reagendado
+    await client.query(
+      `INSERT INTO notificacao (agendamento_id, tipo, status) VALUES ($1, 'lembrete_1_dia', 'pendente')`,
+      [novoAgendamento.id]
+    );
+
+    // Cancela a notificação pendente do agendamento antigo
+    await client.query(
+      `UPDATE notificacao SET status = 'cancelado' WHERE agendamento_id = $1 AND status = 'pendente'`,
+      [id]
+    );
 
     await client.query(`UPDATE agendamento SET status = 'reagendado' WHERE id = $1`, [id]);
 

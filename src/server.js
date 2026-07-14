@@ -3,15 +3,19 @@ const cors = require('cors');
 require('dotenv').config();
 
 const pool = require('./config/database');
-const barbeiroRoutes = require('./routes/barbeiroRoutes');
-const servicoRoutes = require('./routes/servicoRoutes');
+
 const barbeariaRoutes = require('./routes/barbeariaRoutes');
 const unidadeRoutes = require('./routes/unidadeRoutes');
+const barbeiroRoutes = require('./routes/barbeiroRoutes');
+const servicoRoutes = require('./routes/servicoRoutes');
 const planoRoutes = require('./routes/planoRoutes');
 const clienteRoutes = require('./routes/clienteRoutes');
 const agendamentoRoutes = require('./routes/agendamentoRoutes');
 const financeiroRoutes = require('./routes/financeiroRoutes');
 const authRoutes = require('./routes/authRoutes');
+const notificacaoRoutes = require('./routes/notificacaoRoutes');
+
+const { iniciarJobLembretes } = require('./jobs/lembretes');
 
 const app = express();
 
@@ -31,6 +35,7 @@ app.use('/clientes', clienteRoutes);
 app.use('/agendamentos', agendamentoRoutes);
 app.use('/financeiro', financeiroRoutes);
 app.use('/auth', authRoutes);
+app.use('/notificacoes', notificacaoRoutes);
 
 app.get('/teste-banco', async (req, res) => {
   try {
@@ -49,4 +54,5 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
+  iniciarJobLembretes();
 });
