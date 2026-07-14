@@ -14,7 +14,6 @@ async function listarHorariosDisponiveis(req, res) {
   }
 
   try {
-    // Passo 1: descobrir a janela de trabalho daquele dia da semana
     const diaSemana = combinarDataHora(data, '00:00').getDay();
 
     const dispResultado = await pool.query(
@@ -27,7 +26,6 @@ async function listarHorariosDisponiveis(req, res) {
       fim: combinarDataHora(data, linha.hora_fim),
     }));
 
-    // Passo 1.1: aplicar exceções daquele dia específico (folga, bloqueio, extra)
     const excResultado = await pool.query(
       'SELECT tipo, hora_inicio, hora_fim FROM barbeiro_excecao WHERE barbeiro_id = $1 AND data = $2',
       [barbeiro_id, data]
@@ -50,7 +48,6 @@ async function listarHorariosDisponiveis(req, res) {
       }
     }
 
-    // Passo 2: buscar agendamentos já existentes nesse dia
     const agResultado = await pool.query(
       `SELECT data_hora_inicio, data_hora_fim FROM agendamento
        WHERE barbeiro_id = $1 AND data_hora_inicio::date = $2::date
@@ -59,7 +56,6 @@ async function listarHorariosDisponiveis(req, res) {
       [barbeiro_id, data]
     );
 
-    // Passo 3: subtrair cada agendamento existente da janela de trabalho
     for (const agendamento of agResultado.rows) {
       const ocupado = {
         inicio: new Date(agendamento.data_hora_inicio),
@@ -68,7 +64,6 @@ async function listarHorariosDisponiveis(req, res) {
       janelas = subtrairIntervalo(janelas, ocupado);
     }
 
-    // Passo 4: gerar os horários candidatos dentro do que sobrou livre
     const slots = gerarSlotsDisponiveis(janelas, Number(duracao_minutos));
 
     res.json(
@@ -180,6 +175,18 @@ async function cancelarAgendamento(req, res) {
   const { id } = req.params;
 
   try {
+    const atualResultado = await pool.query('SELECT cliente_id FROM agendamento WHERE id = $1', [id]);
+
+    if (atualResultado.rows.length === 0) {
+      return res.status(404).json({ erro: 'Agendamento não encontrado' });
+    }
+
+    const donoDoAgendamento = atualResultado.rows[0].cliente_id;
+
+    if (req.usuario.tipo === 'cliente' && req.usuario.id !== donoDoAgendamento) {
+      return res.status(403).json({ erro: 'Você só pode cancelar seus próprios agendamentos' });
+    }
+
     const resultado = await pool.query(
       `UPDATE agendamento SET status = 'cancelado'
        WHERE id = $1 AND status = 'confirmado'
@@ -188,7 +195,7 @@ async function cancelarAgendamento(req, res) {
     );
 
     if (resultado.rows.length === 0) {
-      return res.status(404).json({ erro: 'Agendamento não encontrado ou não pode mais ser cancelado' });
+      return res.status(404).json({ erro: 'Agendamento não pode mais ser cancelado' });
     }
 
     res.json(resultado.rows[0]);
@@ -197,6 +204,7 @@ async function cancelarAgendamento(req, res) {
     res.status(500).json({ erro: 'Erro ao cancelar agendamento' });
   }
 }
+
 async function concluirAgendamento(req, res) {
   const { id } = req.params;
 
@@ -241,4 +249,87 @@ async function concluirAgendamento(req, res) {
   }
 }
 
-module.exports = { listarHorariosDisponiveis, criarAgendamento, cancelarAgendamento,concluirAgendamento };
+async function reagendarAgendamento(req, res) {
+  const { id } = req.params;
+  const { data, hora_inicio } = req.body;
+
+  if (!data || !hora_inicio) {
+    return res.status(400).json({ erro: 'data e hora_inicio são obrigatórios' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const originalResultado = await client.query(
+      `SELECT * FROM agendamento WHERE id = $1 AND status = 'confirmado'`,
+      [id]
+    );
+
+    if (originalResultado.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Agendamento não encontrado ou não pode ser reagendado' });
+    }
+
+    const original = originalResultado.rows[0];
+
+    if (req.usuario.tipo === 'cliente' && req.usuario.id !== original.cliente_id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ erro: 'Você só pode reagendar seus próprios agendamentos' });
+    }
+
+    const itensOriginaisResultado = await client.query(
+      'SELECT servico_id FROM agendamento_servico WHERE agendamento_id = $1',
+      [id]
+    );
+    const servicoIds = itensOriginaisResultado.rows.map((linha) => linha.servico_id);
+
+    const servicosResultado = await client.query(
+      'SELECT id, duracao_minutos FROM servico WHERE id = ANY($1::int[])',
+      [servicoIds]
+    );
+    const duracaoTotal = servicosResultado.rows.reduce((soma, s) => soma + s.duracao_minutos, 0);
+
+    const novaDataHoraInicio = combinarDataHora(data, hora_inicio);
+    const novaDataHoraFim = adicionarMinutos(novaDataHoraInicio, duracaoTotal + 10);
+
+    const novoResultado = await client.query(
+      `INSERT INTO agendamento (cliente_id, barbeiro_id, unidade_id, data_hora_inicio, data_hora_fim, status, reagendado_de_id)
+       VALUES ($1, $2, $3, $4, $5, 'confirmado', $6) RETURNING *`,
+      [original.cliente_id, original.barbeiro_id, original.unidade_id, novaDataHoraInicio, novaDataHoraFim, original.id]
+    );
+    const novoAgendamento = novoResultado.rows[0];
+
+    const itens = [];
+    for (const servicoId of servicoIds) {
+      const { valorCobrado, cobertoPeloPlano } = await calcularValorServico(client, original.cliente_id, servicoId);
+      const itemResultado = await client.query(
+        `INSERT INTO agendamento_servico (agendamento_id, servico_id, coberto_pelo_plano, valor_cobrado)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [novoAgendamento.id, servicoId, cobertoPeloPlano, valorCobrado]
+      );
+      itens.push(itemResultado.rows[0]);
+    }
+
+    await client.query(`UPDATE agendamento SET status = 'reagendado' WHERE id = $1`, [id]);
+
+    await client.query('COMMIT');
+
+    const valorTotal = itens.reduce((soma, item) => soma + Number(item.valor_cobrado), 0);
+    res.status(201).json({ ...novoAgendamento, itens, valor_total: valorTotal });
+  } catch (erro) {
+    await client.query('ROLLBACK');
+    console.error(erro);
+    res.status(500).json({ erro: 'Erro ao reagendar agendamento' });
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = {
+  listarHorariosDisponiveis,
+  criarAgendamento,
+  cancelarAgendamento,
+  concluirAgendamento,
+  reagendarAgendamento,
+};
