@@ -119,6 +119,21 @@ Migrations separadas por preocupação (schema, dados, constraints, segurança, 
 - Infraestrutura AWS, observabilidade, rate limiting por tenant, connection pooling avançado (PgBouncer), read replicas.
 - Views `vw_faturamento_mensal`/`vw_desempenho_barbeiro_mensal`: precisam ser recriadas com `barbearia_id` e RLS própria (views não herdam RLS da tabela base automaticamente da mesma forma — precisam ser `security_invoker` ou redesenhadas). Como a `CREATE VIEW` dessas views não existe versionada em lugar nenhum do repositório, a primeira tarefa de implementação relacionada a elas é localizar/recriar essa definição — tratado como parte desta fase por ser um vazamento crítico já identificado (financeiro agregando dados de todas as barbearias), mas como sub-tarefa de descoberta, não uma alteração direta de arquivo existente.
 
-## Risco técnico aberto a validar no início da implementação
+## Schema real confirmado (banco `barbearia_db`, inspecionado diretamente)
 
-O tipo de dado da PK de `barbearia.id` (e portanto de `barbearia_id` em todas as tabelas) não pôde ser confirmado por não haver DDL versionado no repositório. Assumimos `INTEGER`/`SERIAL` com base no padrão observado nas demais FKs do código (nenhum uso de `gen_random_uuid()` encontrado). A primeira tarefa da implementação é conectar ao banco real (`\d barbearia`) e confirmar — se for `UUID`, os casts `::integer` nas policies de RLS acima mudam para `::uuid` e o tipo de `current_setting` muda de acordo, mas a estratégia geral não muda.
+`barbearia.id` é `integer` (via `SERIAL`/`nextval`) — confirma a suposição do spec original; os casts `::integer` nas policies de RLS estão corretos. Hoje existe **1 barbearia** cadastrada no banco, o que torna o backfill (migration 003) trivial de validar.
+
+O schema real trouxe também colunas/tabelas que o mapeamento por código-fonte não pôde capturar (por não haver DDL versionado):
+
+- **`assinatura`**: além de `cliente_id`/`plano_id`, tem `status`, `data_inicio`, `proxima_cobranca`, `gateway_subscription_id` — ou seja, já existe integração parcial modelada com um gateway de pagamento externo (provavelmente para cobrança recorrente do plano do cliente final, não da plataforma). Chega ao tenant só via `plano.barbearia_id`.
+- **`pagamento`**: tem tanto `agendamento_id` (nullable) quanto `assinatura_id` (nullable) — registra pagamentos avulsos de atendimento E cobranças de assinatura recorrente na mesma tabela, com `gateway_payment_id`. Isso muda a estratégia de desnormalização: `pagamento.barbearia_id` não pode ser derivado de uma única cadeia de FK fixa (depende de qual das duas colunas está populada).
+- **`usuario_admin.papel`**: existe uma coluna `papel` (default `'dono'`) não utilizada em nenhum lugar do código atual (`apenasAdmin` só checa `tipo === 'admin'` do JWT, nunca `papel`). É um campo pronto para RBAC futuro (dono/gerente/recepcionista) — fora do escopo desta fase, mas vale preservar ao popular o JWT.
+- **Views confirmadas**: `vw_faturamento_mensal` agrega `pagamento` (via `assinatura_id`/`agendamento_id`) sem nenhum filtro de tenant — soma receita de TODAS as barbearias juntas. `vw_desempenho_barbeiro_mensal` faz JOIN `agendamento→barbeiro→agendamento_servico→servico`, também sem filtro de tenant. Ambas as definições completas foram recuperadas e são usadas diretamente nas migrations de recriação (Tarefa 8 do plano) — não é mais uma tarefa de "descoberta", a DDL já é conhecida.
+
+## Ajuste ao plano de desnormalização (seção 8) por causa de `pagamento`
+
+Diferente das demais tabelas filhas (onde `barbearia_id` é sempre derivável de uma FK única), `pagamento.barbearia_id` precisa ser resolvido condicionalmente:
+- Se `agendamento_id IS NOT NULL` → herda de `agendamento.barbearia_id`.
+- Se `assinatura_id IS NOT NULL` → herda de `assinatura.barbearia_id` (que por sua vez herda de `plano.barbearia_id`, então `assinatura` também precisa ganhar `barbearia_id` desnormalizado nesta fase, apesar de não ter sido listada explicitamente na investigação original).
+
+Isso é tratado via trigger `BEFORE INSERT OR UPDATE` em vez de um `CHECK` simples, já que a lógica condicional (`COALESCE` entre as duas origens) não é expressável como constraint declarativa direta com a mesma clareza.
