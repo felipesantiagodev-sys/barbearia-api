@@ -1,8 +1,6 @@
-const pool = require('../config/database');
-
 async function listarUnidades(req, res) {
   try {
-    const resultado = await pool.query('SELECT * FROM unidade WHERE ativo = true ORDER BY nome');
+    const resultado = await req.db.query('SELECT * FROM unidade WHERE ativo = true ORDER BY nome');
     res.json(resultado.rows);
   } catch (erro) {
     console.error(erro);
@@ -10,15 +8,20 @@ async function listarUnidades(req, res) {
   }
 }
 
+// `barbearia_id` vem de `req.usuario.barbearia_id` (JWT, injetado por
+// `verificarToken`), nunca do body: um admin autenticado só pode criar
+// unidades para a própria barbearia. A rota já exige `apenasAdmin`, então
+// `req.usuario` está garantidamente populado.
 async function criarUnidade(req, res) {
-  const { barbearia_id, nome, endereco, telefone } = req.body;
+  const { nome, endereco, telefone } = req.body;
+  const barbearia_id = req.usuario.barbearia_id;
 
-  if (!barbearia_id || !nome) {
-    return res.status(400).json({ erro: 'barbearia_id e nome são obrigatórios' });
+  if (!nome) {
+    return res.status(400).json({ erro: 'nome é obrigatório' });
   }
 
   try {
-    const resultado = await pool.query(
+    const resultado = await req.db.query(
       'INSERT INTO unidade (barbearia_id, nome, endereco, telefone) VALUES ($1, $2, $3, $4) RETURNING *',
       [barbearia_id, nome, endereco, telefone]
     );
