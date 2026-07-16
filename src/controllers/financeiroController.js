@@ -1,8 +1,6 @@
-const pool = require('../config/database');
-
 async function faturamentoMensal(req, res) {
   try {
-    const resultado = await pool.query('SELECT * FROM vw_faturamento_mensal');
+    const resultado = await req.db.query('SELECT * FROM vw_faturamento_mensal');
     res.json(resultado.rows);
   } catch (erro) {
     console.error(erro);
@@ -22,7 +20,7 @@ async function desempenhoBarbeiros(req, res) {
       parametros.push(barbeiro_id);
     }
 
-    const resultado = await pool.query(query, parametros);
+    const resultado = await req.db.query(query, parametros);
     res.json(resultado.rows);
   } catch (erro) {
     console.error(erro);

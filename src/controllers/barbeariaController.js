@@ -18,7 +18,7 @@ async function criarBarbearia(req, res) {
   }
 
   try {
-    const resultado = await pool.query(
+    const resultado = await req.db.query(
       'INSERT INTO barbearia (nome, cnpj) VALUES ($1, $2) RETURNING *',
       [nome, cnpj]
     );

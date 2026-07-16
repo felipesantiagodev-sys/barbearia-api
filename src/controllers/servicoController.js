@@ -1,8 +1,6 @@
-const pool = require('../config/database');
-
 async function listarServicos(req, res) {
   try {
-    const resultado = await pool.query(
+    const resultado = await req.db.query(
       'SELECT id, nome, categoria, duracao_minutos, valor FROM servico WHERE ativo = true ORDER BY categoria, nome'
     );
     res.json(resultado.rows);
@@ -12,15 +10,19 @@ async function listarServicos(req, res) {
   }
 }
 
+// `barbearia_id` vem de `req.usuario.barbearia_id` (JWT), nunca do body,
+// pelo mesmo motivo de `criarUnidade`/`criarBarbeiro`: evita que um admin
+// crie um serviço em nome de outra barbearia.
 async function criarServico(req, res) {
-  const { barbearia_id, nome, categoria, duracao_minutos, valor } = req.body;
+  const { nome, categoria, duracao_minutos, valor } = req.body;
+  const barbearia_id = req.usuario.barbearia_id;
 
-  if (!barbearia_id || !nome || !categoria || !duracao_minutos || valor === undefined) {
+  if (!nome || !categoria || !duracao_minutos || valor === undefined) {
     return res.status(400).json({ erro: 'Todos os campos são obrigatórios' });
   }
 
   try {
-    const resultado = await pool.query(
+    const resultado = await req.db.query(
       `INSERT INTO servico (barbearia_id, nome, categoria, duracao_minutos, valor)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [barbearia_id, nome, categoria, duracao_minutos, valor]

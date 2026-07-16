@@ -1,8 +1,6 @@
-const pool = require('../config/database');
-
 async function listarPlanos(req, res) {
   try {
-    const resultado = await pool.query(
+    const resultado = await req.db.query(
       'SELECT * FROM plano WHERE ativo = true ORDER BY nome'
     );
     res.json(resultado.rows);
@@ -12,15 +10,18 @@ async function listarPlanos(req, res) {
   }
 }
 
+// `barbearia_id` vem de `req.usuario.barbearia_id` (JWT), nunca do body,
+// mesmo motivo de `criarUnidade`/`criarServico`/`criarBarbeiro`.
 async function criarPlano(req, res) {
-  const { barbearia_id, nome, valor_mensal, desconto_servico_fora_plano, intervalo_minimo_dias } = req.body;
+  const { nome, valor_mensal, desconto_servico_fora_plano, intervalo_minimo_dias } = req.body;
+  const barbearia_id = req.usuario.barbearia_id;
 
-  if (!barbearia_id || !nome || valor_mensal === undefined) {
-    return res.status(400).json({ erro: 'barbearia_id, nome e valor_mensal são obrigatórios' });
+  if (!nome || valor_mensal === undefined) {
+    return res.status(400).json({ erro: 'nome e valor_mensal são obrigatórios' });
   }
 
   try {
-    const resultado = await pool.query(
+    const resultado = await req.db.query(
       `INSERT INTO plano (barbearia_id, nome, valor_mensal, desconto_servico_fora_plano, intervalo_minimo_dias)
        VALUES ($1, $2, $3, COALESCE($4, 10), COALESCE($5, 1)) RETURNING *`,
       [barbearia_id, nome, valor_mensal, desconto_servico_fora_plano, intervalo_minimo_dias]
@@ -32,38 +33,63 @@ async function criarPlano(req, res) {
   }
 }
 
+// Antes usava um client próprio (`pool.connect()`) com BEGIN/COMMIT dedicado
+// para inserir múltiplas linhas em `plano_servico`. Removido pelo mesmo
+// motivo do `associarServicos` em `barbeiroController.js`: `req.db` já roda
+// dentro da transação gerenciada pelo middleware `escoparTenant`, então uma
+// segunda transação aqui seria aninhada. `plano_servico` também tem
+// `barbearia_id` NOT NULL com RLS (migrations 002/004/005), preenchido a
+// partir de `req.usuario.barbearia_id` (nunca do body).
+//
+// VALIDAÇÃO de `id` (plano_id) e `servico_ids`: mesmo risco documentado em
+// `barbeiroController.js#associarServicos` -- tanto o `:id` da URL quanto os
+// `servico_ids` do body vêm sem checagem de tenant, e as FKs envolvidas
+// (`plano_servico.plano_id -> plano.id`, `plano_servico.servico_id ->
+// servico.id`) ignoram RLS. Sem essa validação, um admin poderia associar
+// serviços de outra barbearia ao seu plano, ou (com um `:id` forjado)
+// associar serviços a um plano de outra barbearia. Validamos ambos via
+// `req.db` (escopado por RLS).
 async function associarServicosPlano(req, res) {
   const { id } = req.params;
   const { servico_ids } = req.body;
+  const barbearia_id = req.usuario.barbearia_id;
 
   if (!Array.isArray(servico_ids) || servico_ids.length === 0) {
     return res.status(400).json({ erro: 'servico_ids deve ser uma lista com pelo menos um id' });
   }
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    const planoResultado = await req.db.query('SELECT id FROM plano WHERE id = $1', [id]);
+    if (planoResultado.rows.length === 0) {
+      return res.status(404).json({ erro: 'Plano não encontrado' });
+    }
+
+    const servicosResultado = await req.db.query(
+      'SELECT id FROM servico WHERE id = ANY($1::int[])',
+      [servico_ids]
+    );
+
+    if (servicosResultado.rows.length !== new Set(servico_ids).size) {
+      return res.status(404).json({ erro: 'Um ou mais serviços não foram encontrados' });
+    }
+
     for (const servicoId of servico_ids) {
-      await client.query(
-        'INSERT INTO plano_servico (plano_id, servico_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [id, servicoId]
+      await req.db.query(
+        'INSERT INTO plano_servico (barbearia_id, plano_id, servico_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+        [barbearia_id, id, servicoId]
       );
     }
-    await client.query('COMMIT');
     res.status(201).json({ mensagem: 'Serviços associados ao plano com sucesso' });
   } catch (erro) {
-    await client.query('ROLLBACK');
     console.error(erro);
     res.status(500).json({ erro: 'Erro ao associar serviços ao plano' });
-  } finally {
-    client.release();
   }
 }
 
 async function listarServicosDoPlano(req, res) {
   const { id } = req.params;
   try {
-    const resultado = await pool.query(
+    const resultado = await req.db.query(
       `SELECT s.id, s.nome, s.categoria, s.duracao_minutos, s.valor
        FROM plano_servico ps
        JOIN servico s ON s.id = ps.servico_id
