@@ -22,6 +22,25 @@ async function cadastrarOnboarding(req, res) {
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
 
+    // A constraint única em usuario_admin é composta (barbearia_id, email) —
+    // como cada cadastro gera uma barbearia nova, o banco nunca rejeitaria
+    // por email duplicado via 23505. Bloqueamos explicitamente aqui se já
+    // existir um cadastro PENDENTE (não verificado) com esse email, mas
+    // permitimos se o email já pertence a uma conta verificada em outra
+    // barbearia (cenário legítimo: mesma pessoa dona de duas barbearias).
+    const emailPendenteResultado = await client.query(
+      'SELECT id FROM usuario_admin WHERE email = $1 AND email_verificado = false',
+      [email]
+    );
+
+    if (emailPendenteResultado.rows.length > 0) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(409).json({
+        erro: 'Já existe um cadastro pendente para este email. Verifique seu email ou solicite reenvio da confirmação.',
+      });
+    }
+
     const senha_hash = await bcrypt.hash(senha, 10);
     const token_verificacao = crypto.randomUUID();
 
