@@ -79,6 +79,10 @@ async function loginAdmin(req, res) {
       return res.status(401).json({ erro: 'Email ou senha inválidos' });
     }
 
+    if (!adminAutenticado.email_verificado) {
+      return res.status(403).json({ erro: 'Confirme seu email antes de fazer login' });
+    }
+
     const token = jwt.sign(
       { id: adminAutenticado.id, tipo: 'admin', barbearia_id: adminAutenticado.barbearia_id, papel: adminAutenticado.papel },
       process.env.JWT_SECRET,

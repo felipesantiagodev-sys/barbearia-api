@@ -73,4 +73,35 @@ describe('Autenticação multi-tenant', () => {
     }
     expect(verificacao.rows[0].barbearia_id).toBe(barbeariaA.id);
   });
+
+  test('loginAdmin rejeita acesso quando email não foi verificado, mesmo com senha correta', async () => {
+    const barbearia = await criarBarbearia('Barbearia Não Verificada');
+    await criarAdminDireto(barbearia.id, {
+      email: 'naoverificado@teste.com',
+      senha: 'senha123',
+    });
+
+    // criarAdminDireto (factories.js) insere com email_verificado usando o
+    // DEFAULT da coluna, que é `true` -- para este teste precisamos de
+    // email_verificado = false explicitamente. Ajustar via UPDATE direto,
+    // dentro de uma transação dedicada com app.tenant_id setado (RLS).
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia.id)]);
+      await client.query(
+        `UPDATE usuario_admin SET email_verificado = false WHERE email = 'naoverificado@teste.com'`
+      );
+      await client.query('COMMIT');
+    } finally {
+      client.release();
+    }
+
+    const resposta = await request(app)
+      .post('/auth/admin/login')
+      .send({ email: 'naoverificado@teste.com', senha: 'senha123' });
+
+    expect(resposta.status).toBe(403);
+    expect(resposta.body.erro).toMatch(/confirme seu email/i);
+  });
 });
