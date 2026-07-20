@@ -344,6 +344,18 @@ describe('GET /onboarding/verificar', () => {
     expect(resposta.status).toBe(400);
   });
 
+  // `token_verificacao` é do tipo UUID no banco -- um valor que não é
+  // sintaticamente um UUID (ex.: "abc") faz o Postgres lançar 22P02 (erro
+  // de tipo) em vez de simplesmente não encontrar a linha. Sem tratamento
+  // explícito desse código, isso cairia no catch genérico e responderia
+  // 500 (falha do servidor) para o que é, na verdade, um erro de input do
+  // cliente -- rota pública, então esse tipo de request malformada é
+  // esperada na prática, não só um caso de borda teórico.
+  test('token sintaticamente inválido (não-UUID) retorna 400, não 500', async () => {
+    const resposta = await request(app).get('/onboarding/verificar?token=nao-e-um-uuid');
+    expect(resposta.status).toBe(400);
+  });
+
   test('token já usado (email já verificado) retorna 400 na segunda tentativa', async () => {
     const { admin } = await criarBarbeariaPendenteComAdmin();
 

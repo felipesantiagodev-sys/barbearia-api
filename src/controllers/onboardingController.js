@@ -129,6 +129,13 @@ async function verificarEmail(req, res) {
     res.json({ mensagem: 'Email confirmado! Você já pode fazer login.' });
   } catch (erro) {
     await client.query('ROLLBACK').catch(() => {});
+    // 22P02 = sintaxe inválida para o tipo UUID (token não é um UUID
+    // válido). Isso é erro de input do cliente (400), não falha do
+    // servidor -- sem este tratamento, um token malformado numa rota
+    // pública cairia no fallback genérico de 500.
+    if (erro.code === '22P02') {
+      return res.status(400).json({ erro: 'Token inválido ou expirado' });
+    }
     console.error(erro);
     res.status(500).json({ erro: 'Erro ao confirmar email' });
   } finally {
@@ -150,8 +157,12 @@ async function reenviarVerificacao(req, res) {
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
 
+    // `ativo = true` mantém este filtro consistente com loginAdmin
+    // (src/controllers/authController.js) -- sem ele, um admin pendente
+    // desativado continuaria recebendo reenvios de verificação mesmo sem
+    // nunca poder efetivamente logar.
     const adminResultado = await client.query(
-      `SELECT * FROM usuario_admin WHERE email = $1 AND email_verificado = false`,
+      `SELECT * FROM usuario_admin WHERE email = $1 AND email_verificado = false AND ativo = true`,
       [email]
     );
 
