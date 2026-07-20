@@ -1,8 +1,5 @@
-const { enviarEmailVerificacao } = require('../../src/services/emailService');
-
 describe('emailService', () => {
   const chamadasOriginais = [];
-  let ResendMock;
 
   beforeEach(() => {
     chamadasOriginais.length = 0;
