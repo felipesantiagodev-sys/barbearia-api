@@ -1,4 +1,9 @@
 -- Up Migration
+-- Defaults 'ativa'/true (abaixo) sao deliberados, nao "fail-open" acidental:
+-- preservam o comportamento das barbearias/admins ja existentes, que nunca
+-- passaram por nenhum fluxo de verificacao. O onboarding self-service
+-- (fase de implementacao futura) insere explicitamente 'pendente_verificacao'
+-- e false para os novos cadastros -- este default so afeta linhas antigas.
 ALTER TABLE barbearia
   ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'ativa'
   CHECK (status IN ('pendente_verificacao', 'ativa', 'suspensa'));
