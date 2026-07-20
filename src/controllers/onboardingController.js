@@ -85,4 +85,110 @@ async function cadastrarOnboarding(req, res) {
   });
 }
 
-module.exports = { cadastrarOnboarding };
+async function verificarEmail(req, res) {
+  const { token } = req.query;
+
+  if (!token) {
+    return res.status(400).json({ erro: 'token é obrigatório' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
+
+    const adminResultado = await client.query(
+      `SELECT * FROM usuario_admin
+       WHERE token_verificacao = $1
+         AND token_verificacao_expira_em > now()
+         AND email_verificado = false`,
+      [token]
+    );
+
+    if (adminResultado.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ erro: 'Token inválido ou expirado' });
+    }
+
+    const admin = adminResultado.rows[0];
+
+    await client.query(
+      `UPDATE usuario_admin
+       SET email_verificado = true, token_verificacao = NULL, token_verificacao_expira_em = NULL
+       WHERE id = $1`,
+      [admin.id]
+    );
+
+    await client.query(
+      `UPDATE barbearia SET status = 'ativa' WHERE id = $1 AND status = 'pendente_verificacao'`,
+      [admin.barbearia_id]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({ mensagem: 'Email confirmado! Você já pode fazer login.' });
+  } catch (erro) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(erro);
+    res.status(500).json({ erro: 'Erro ao confirmar email' });
+  } finally {
+    client.release();
+  }
+}
+
+async function reenviarVerificacao(req, res) {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ erro: 'email é obrigatório' });
+  }
+
+  const client = await pool.connect();
+  let admin = null;
+
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
+
+    const adminResultado = await client.query(
+      `SELECT * FROM usuario_admin WHERE email = $1 AND email_verificado = false`,
+      [email]
+    );
+
+    if (adminResultado.rows.length > 0) {
+      admin = adminResultado.rows[0];
+      const novoToken = crypto.randomUUID();
+
+      await client.query(
+        `UPDATE usuario_admin
+         SET token_verificacao = $1, token_verificacao_expira_em = now() + interval '${HORAS_EXPIRACAO_TOKEN} hours'
+         WHERE id = $2`,
+        [novoToken, admin.id]
+      );
+      admin.token_verificacao = novoToken;
+    }
+
+    await client.query('COMMIT');
+  } catch (erro) {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+    console.error(erro);
+    return res.status(500).json({ erro: 'Erro ao processar reenvio' });
+  }
+
+  client.release();
+
+  if (admin) {
+    try {
+      await enviarEmailVerificacao(admin.email, admin.nome, admin.token_verificacao);
+    } catch (erro) {
+      console.error('Falha ao reenviar email de verificação:', erro);
+    }
+  }
+
+  // Resposta idêntica exista ou não o email, para não permitir enumeração
+  // de contas cadastradas via este endpoint.
+  res.json({ mensagem: 'Se o email estiver cadastrado e pendente, um novo link foi enviado.' });
+}
+
+module.exports = { cadastrarOnboarding, verificarEmail, reenviarVerificacao };

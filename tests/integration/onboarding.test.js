@@ -8,16 +8,45 @@ jest.mock('../../src/services/emailService', () => ({
 }));
 
 const { enviarEmailVerificacao } = require('../../src/services/emailService');
+const { limitadorCadastro, limitadorReenvio } = require('../../src/middlewares/rateLimiters');
+const { ipKeyGenerator } = require('express-rate-limit');
+
+// `limitadorCadastro` (5/hora) e `limitadorReenvio` (3/hora) são singletons
+// do express-rate-limit com estado em memória compartilhado por TODOS os
+// testes deste processo Jest, chaveados por padrão em req.ip. O supertest
+// sempre bate como '::ffff:127.0.0.1', mas o express-rate-limit normaliza
+// IPs via `ipKeyGenerator` antes de usá-los como chave no store (ex.:
+// '::ffff:127.0.0.1' vira '127.0.0.1') -- por isso a chave usada no reset
+// precisa passar pelo mesmo helper, senão `resetKey` não encontra a entrada
+// certa. Os vários describes/testes abaixo (cadastro, verificação, reenvio)
+// dividem a mesma contagem e estourariam o limite de produção
+// artificialmente. `resetKey` é a API pública do express-rate-limit para
+// zerar a contagem de uma chave -- não altera `max`, `windowMs` nem qualquer
+// outro comportamento de produção dos limitadores, só reseta o estado entre
+// testes.
+const CHAVE_IP_TESTE = ipKeyGenerator('::ffff:127.0.0.1');
+function resetarLimitadores() {
+  limitadorCadastro.resetKey(CHAVE_IP_TESTE);
+  limitadorReenvio.resetKey(CHAVE_IP_TESTE);
+}
+
+// Os pools de conexão (`pool` de tests/helpers/db.js e `poolTenant` de
+// src/middlewares/tenant.js) são singletons compartilhados por TODOS os
+// describe blocks deste arquivo. Fechá-los precisa acontecer uma única vez,
+// ao final de toda a suíte -- por isso este afterAll fica no escopo raiz do
+// arquivo, e não dentro de um describe específico (fechar o pool ao final do
+// primeiro describe quebraria os describes seguintes, que ainda precisam
+// dele).
+afterAll(async () => {
+  await fecharBanco();
+  await poolTenant.end();
+});
 
 describe('POST /onboarding/cadastro', () => {
   afterEach(async () => {
     await limparBanco();
     enviarEmailVerificacao.mockClear();
-  });
-
-  afterAll(async () => {
-    await fecharBanco();
-    await poolTenant.end();
+    resetarLimitadores();
   });
 
   async function buscarComoPlataforma(query, params) {
@@ -194,5 +223,110 @@ describe('POST /onboarding/cadastro', () => {
     );
     expect(novaBarbearia.rows).toHaveLength(1);
     expect(novoAdmin.barbearia_id).toBe(novaBarbearia.rows[0].id);
+  });
+});
+
+describe('GET /onboarding/verificar', () => {
+  afterEach(async () => {
+    await limparBanco();
+  });
+
+  async function criarBarbeariaPendenteComAdmin() {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
+
+      const barbearia = await client.query(
+        `INSERT INTO barbearia (nome, status) VALUES ('Barbearia Pendente', 'pendente_verificacao') RETURNING *`
+      );
+
+      const senha_hash = await require('bcrypt').hash('senha123', 10);
+      // token_verificacao é UUID no banco (migration 009); usamos
+      // crypto.randomUUID() em vez de uma string arbitrária para o valor ser
+      // aceito pela coluna.
+      const token = require('crypto').randomUUID();
+      const admin = await client.query(
+        `INSERT INTO usuario_admin (barbearia_id, nome, email, senha_hash, email_verificado, token_verificacao, token_verificacao_expira_em)
+         VALUES ($1, 'Admin Pendente', 'pendente@teste.com', $2, false, $3, now() + interval '24 hours')
+         RETURNING *`,
+        [barbearia.rows[0].id, senha_hash, token]
+      );
+
+      await client.query('COMMIT');
+      return { barbearia: barbearia.rows[0], admin: admin.rows[0] };
+    } finally {
+      client.release();
+    }
+  }
+
+  test('token válido confirma email e ativa a barbearia', async () => {
+    const { admin, barbearia } = await criarBarbeariaPendenteComAdmin();
+
+    const resposta = await request(app).get(`/onboarding/verificar?token=${admin.token_verificacao}`);
+
+    expect(resposta.status).toBe(200);
+
+    const client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
+    const adminAtualizado = await client.query('SELECT * FROM usuario_admin WHERE id = $1', [admin.id]);
+    const barbeariaAtualizada = await client.query('SELECT * FROM barbearia WHERE id = $1', [barbearia.id]);
+    await client.query('ROLLBACK');
+    client.release();
+
+    expect(adminAtualizado.rows[0].email_verificado).toBe(true);
+    expect(adminAtualizado.rows[0].token_verificacao).toBeNull();
+    expect(barbeariaAtualizada.rows[0].status).toBe('ativa');
+  });
+
+  test('token inexistente retorna 400', async () => {
+    // Precisa ser um UUID sintaticamente válido (coluna token_verificacao é
+    // UUID) para exercer o caminho de "não encontrado", e não um erro de
+    // tipo do Postgres.
+    const resposta = await request(app).get(
+      `/onboarding/verificar?token=${require('crypto').randomUUID()}`
+    );
+    expect(resposta.status).toBe(400);
+  });
+
+  test('token já usado (email já verificado) retorna 400 na segunda tentativa', async () => {
+    const { admin } = await criarBarbeariaPendenteComAdmin();
+
+    await request(app).get(`/onboarding/verificar?token=${admin.token_verificacao}`);
+    const segundaTentativa = await request(app).get(`/onboarding/verificar?token=${admin.token_verificacao}`);
+
+    expect(segundaTentativa.status).toBe(400);
+  });
+});
+
+describe('POST /onboarding/reenviar-verificacao', () => {
+  afterEach(async () => {
+    await limparBanco();
+    enviarEmailVerificacao.mockClear();
+    resetarLimitadores();
+  });
+
+  test('reenvia com novo token quando o email está pendente', async () => {
+    await request(app).post('/onboarding/cadastro').send({
+      nome_barbearia: 'Barbearia Reenvio',
+      nome_admin: 'Admin Reenvio',
+      email: 'reenvio@teste.com',
+      senha: 'senhaSegura123',
+    });
+    enviarEmailVerificacao.mockClear();
+
+    const resposta = await request(app).post('/onboarding/reenviar-verificacao').send({ email: 'reenvio@teste.com' });
+
+    expect(resposta.status).toBe(200);
+    expect(enviarEmailVerificacao).toHaveBeenCalledTimes(1);
+    expect(enviarEmailVerificacao.mock.calls[0][0]).toBe('reenvio@teste.com');
+  });
+
+  test('responde com sucesso genérico mesmo se o email não existir (sem enumeração)', async () => {
+    const resposta = await request(app).post('/onboarding/reenviar-verificacao').send({ email: 'nao-existe@teste.com' });
+
+    expect(resposta.status).toBe(200);
+    expect(enviarEmailVerificacao).not.toHaveBeenCalled();
   });
 });

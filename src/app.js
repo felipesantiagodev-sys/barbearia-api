@@ -15,6 +15,7 @@ const financeiroRoutes = require('./routes/financeiroRoutes');
 const authRoutes = require('./routes/authRoutes');
 const notificacaoRoutes = require('./routes/notificacaoRoutes');
 const plataformaRoutes = require('./routes/plataformaRoutes');
+const onboardingRoutes = require('./routes/onboardingRoutes');
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use('/financeiro', financeiroRoutes);
 app.use('/auth', authRoutes);
 app.use('/notificacoes', notificacaoRoutes);
 app.use('/plataforma', plataformaRoutes);
+app.use('/onboarding', onboardingRoutes);
 
 app.get('/teste-banco', async (req, res) => {
   try {
