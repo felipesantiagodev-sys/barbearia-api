@@ -224,6 +224,60 @@ describe('POST /onboarding/cadastro', () => {
     expect(novaBarbearia.rows).toHaveLength(1);
     expect(novoAdmin.barbearia_id).toBe(novaBarbearia.rows[0].id);
   });
+
+  // A checagem de "email já pendente" em cadastrarOnboarding é um SELECT
+  // seguido de INSERT (sem lock) -- sozinha, não impede duas requisições
+  // CONCORRENTES com o mesmo email de passarem pela checagem antes de
+  // qualquer uma commitar (ver migration 010_indice_unico_email_pendente).
+  // Este teste ignora a rota HTTP (que serializa via supertest/event loop
+  // e não reproduziria a corrida de verdade) e ataca a garantia no nível
+  // que realmente importa: duas transações concorrentes tentando inserir
+  // o mesmo email pendente diretamente no banco. Se o índice único parcial
+  // não existisse, as duas inserções teriam sucesso.
+  test('índice único no banco impede duas inserções concorrentes com o mesmo email pendente', async () => {
+    const emailConcorrente = 'concorrencia@teste.com';
+
+    async function inserirAdminPendente() {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
+        const barbearia = await client.query(
+          `INSERT INTO barbearia (nome, status) VALUES ('Barbearia Concorrente', 'pendente_verificacao') RETURNING *`
+        );
+        await client.query(
+          `INSERT INTO usuario_admin (barbearia_id, nome, email, senha_hash, email_verificado)
+           VALUES ($1, 'Admin Concorrente', $2, 'hash-fake', false)`,
+          [barbearia.rows[0].id, emailConcorrente]
+        );
+        await client.query('COMMIT');
+        return { sucesso: true };
+      } catch (erro) {
+        await client.query('ROLLBACK').catch(() => {});
+        return { sucesso: false, codigo: erro.code };
+      } finally {
+        client.release();
+      }
+    }
+
+    const [resultadoA, resultadoB] = await Promise.all([
+      inserirAdminPendente(),
+      inserirAdminPendente(),
+    ]);
+
+    const sucessos = [resultadoA, resultadoB].filter((r) => r.sucesso);
+    const falhas = [resultadoA, resultadoB].filter((r) => !r.sucesso);
+
+    expect(sucessos).toHaveLength(1);
+    expect(falhas).toHaveLength(1);
+    expect(falhas[0].codigo).toBe('23505');
+
+    const admins = await buscarComoPlataforma(
+      'SELECT * FROM usuario_admin WHERE email = $1',
+      [emailConcorrente]
+    );
+    expect(admins.rows).toHaveLength(1);
+  });
 });
 
 describe('GET /onboarding/verificar', () => {
