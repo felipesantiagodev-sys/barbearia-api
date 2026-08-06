@@ -21,4 +21,16 @@ const limitadorReenvio = rateLimit({
   message: { erro: 'Muitas tentativas de reenvio. Tente novamente mais tarde.' },
 });
 
-module.exports = { limitadorCadastro, limitadorReenvio };
+// Esqueci minha senha: mesmo limite de reenvio de verificação -- o caso de
+// uso legítimo (não recebeu o email) não deveria precisar de mais de 3
+// tentativas por hora, e o endpoint já responde de forma genérica então
+// repetir a tentativa não ajuda a descobrir mais informação.
+const limitadorEsqueciSenha = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { erro: 'Muitas tentativas. Tente novamente mais tarde.' },
+});
+
+module.exports = { limitadorCadastro, limitadorReenvio, limitadorEsqueciSenha };
