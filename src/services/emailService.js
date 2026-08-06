@@ -40,4 +40,26 @@ async function enviarEmailVerificacao(destinatario, nome, tokenVerificacao) {
   }
 }
 
-module.exports = { enviarEmailVerificacao };
+async function enviarEmailRedefinicaoSenha(destinatario, nomeBarbearia, tokenReset, tipoUsuario) {
+  const resend = obterCliente();
+  const linkRedefinicao = `${process.env.APP_BASE_URL}/redefinir-senha?tipo=${tipoUsuario}&token=${tokenReset}`;
+  const nomeSeguro = escaparHtml(nomeBarbearia);
+
+  const { error } = await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL,
+    to: [destinatario],
+    subject: `Redefinir senha — ${nomeSeguro}`,
+    html: `
+      <p>Olá!</p>
+      <p>Recebemos um pedido para redefinir a senha da sua conta em <strong>${nomeSeguro}</strong>.</p>
+      <p><a href="${linkRedefinicao}">Redefinir minha senha</a></p>
+      <p>Este link expira em 1 hora. Se você não pediu essa redefinição, pode ignorar este email.</p>
+    `,
+  });
+
+  if (error) {
+    throw new Error(`Falha ao enviar email de redefinição de senha: ${error.message}`);
+  }
+}
+
+module.exports = { enviarEmailVerificacao, enviarEmailRedefinicaoSenha };
