@@ -5,7 +5,7 @@ import { setToken } from './client';
 describe('auth', () => {
   beforeEach(() => {
     setToken(null);
-    global.fetch = vi.fn();
+    globalThis.fetch = vi.fn();
   });
 
   afterEach(() => {
@@ -13,14 +13,14 @@ describe('auth', () => {
   });
 
   test('loginCliente chama o endpoint correto e retorna os dados', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ token: 'jwt-fake', nome: 'Cliente Teste', email: 'cliente@teste.com' }),
     });
 
     const resultado = await loginCliente('cliente@teste.com', 'senha123');
 
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(globalThis.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/auth/cliente/login',
       expect.objectContaining({
         method: 'POST',
@@ -31,21 +31,21 @@ describe('auth', () => {
   });
 
   test('loginAdmin chama o endpoint correto', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ token: 'jwt-fake-admin', nome: 'Admin Teste', email: 'admin@teste.com' }),
     });
 
     await loginAdmin('admin@teste.com', 'senha123');
 
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(globalThis.fetch).toHaveBeenCalledWith(
       'http://localhost:3000/auth/admin/login',
       expect.objectContaining({ method: 'POST' })
     );
   });
 
   test('lança erro com a mensagem do backend quando a resposta não é ok', async () => {
-    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
       status: 401,
       json: async () => ({ erro: 'Email ou senha inválidos' }),

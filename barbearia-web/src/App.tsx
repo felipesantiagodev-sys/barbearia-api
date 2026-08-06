@@ -1,15 +1,35 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { TemaProvider } from './contexts/TemaContext';
+import LoginCliente from './pages/LoginCliente';
+import LoginAdmin from './pages/LoginAdmin';
+import Home from './pages/Home';
+import RotaProtegida from './components/RotaProtegida';
 
-function Placeholder() {
-  return <div>Barbearia Web — em construção</div>;
+function AreaComTema({ children }: { children: React.ReactNode }) {
+  const { usuario } = useAuth();
+  return <TemaProvider barbeariaId={usuario?.barbearia_id ?? null}>{children}</TemaProvider>;
 }
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Placeholder />} />
-      </Routes>
+      <AuthProvider>
+        <AreaComTema>
+          <Routes>
+            <Route path="/login" element={<LoginCliente />} />
+            <Route path="/admin/login" element={<LoginAdmin />} />
+            <Route
+              path="/"
+              element={
+                <RotaProtegida>
+                  <Home />
+                </RotaProtegida>
+              }
+            />
+          </Routes>
+        </AreaComTema>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
