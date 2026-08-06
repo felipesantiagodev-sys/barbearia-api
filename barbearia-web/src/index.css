@@ -4,8 +4,45 @@
   padding: 0;
 }
 
+:root {
+  /* Marca da plataforma (neutra — a cor viva é a do tenant, aplicada só após login) */
+  --plataforma-fundo: #0a0a0b;
+  --plataforma-superficie: #18181b;
+  --plataforma-borda: #27272a;
+  --plataforma-texto: #fafaf9;
+  --plataforma-texto-secundario: #71717a;
+  --plataforma-foco: #e4e4e7;
+
+  --fonte-display: 'Inter', system-ui, -apple-system, sans-serif;
+  --fonte-corpo: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  color: var(--cor-texto-sobre-fundo, #000000);
-  background-color: var(--cor-fundo, #FFFFFF);
+  font-family: var(--fonte-corpo);
+  color: var(--cor-texto-sobre-fundo, var(--plataforma-texto));
+  background-color: var(--cor-fundo, var(--plataforma-fundo));
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--plataforma-foco);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

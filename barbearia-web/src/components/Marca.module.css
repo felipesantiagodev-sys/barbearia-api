@@ -1,0 +1,16 @@
+.wordmark {
+  font-family: var(--fonte-display);
+  font-weight: 700;
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+  color: var(--plataforma-texto);
+  text-align: center;
+}
+
+.tracoAssinatura {
+  width: 2.25rem;
+  height: 2px;
+  margin: 0.5rem auto 0;
+  background: var(--plataforma-texto);
+  transform: skewX(-20deg);
+}

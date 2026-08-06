@@ -1,0 +1,72 @@
+.pagina {
+  min-height: 100svh;
+  padding: 2rem 1.5rem;
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+.cabecalho {
+  margin-bottom: 2rem;
+}
+
+.saudacao {
+  font-family: var(--fonte-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.papel {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--plataforma-texto-secundario);
+}
+
+.cardTema {
+  background: var(--plataforma-superficie);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.amostraCor {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--plataforma-borda);
+  flex-shrink: 0;
+}
+
+.tema {
+  font-size: 0.875rem;
+}
+
+.temaRotulo {
+  color: var(--plataforma-texto-secundario);
+}
+
+.botaoSair {
+  background: transparent;
+  color: var(--plataforma-texto-secundario);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.botaoSair:hover {
+  color: var(--plataforma-texto);
+  border-color: var(--cor-primaria, var(--plataforma-foco));
+}

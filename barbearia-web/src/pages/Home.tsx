@@ -1,20 +1,31 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useTema } from '../contexts/TemaContext';
+import styles from './Home.module.css';
 
 export default function Home() {
   const { usuario, sair } = useAuth();
   const { cores } = useTema();
 
   return (
-    <div>
-      <h1>Olá, {usuario?.nome}</h1>
-      <p>Tipo: {usuario?.tipo}</p>
+    <div className={styles.pagina}>
+      <div className={styles.cabecalho}>
+        <h1 className={styles.saudacao}>Olá, {usuario?.nome}</h1>
+        <p className={styles.papel}>{usuario?.tipo === 'admin' ? 'Administrador' : 'Cliente'}</p>
+      </div>
+
       {cores && (
-        <p>
-          Cor primária da sua barbearia: <span style={{ color: cores.cor_primaria }}>{cores.cor_primaria}</span>
-        </p>
+        <div className={styles.cardTema}>
+          <span className={styles.amostraCor} style={{ backgroundColor: cores.cor_primaria }} />
+          <p className={styles.tema}>
+            <span className={styles.temaRotulo}>Cor da sua barbearia </span>
+            {cores.cor_primaria}
+          </p>
+        </div>
       )}
-      <button onClick={sair}>Sair</button>
+
+      <button className={styles.botaoSair} onClick={sair}>
+        Sair
+      </button>
     </div>
   );
 }
