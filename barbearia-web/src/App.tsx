@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { TemaProvider } from './contexts/TemaContext';
 import LoginCliente from './pages/LoginCliente';
 import LoginAdmin from './pages/LoginAdmin';
+import RecuperarSenha from './pages/RecuperarSenha';
+import RedefinirSenha from './pages/RedefinirSenha';
 import Home from './pages/Home';
 import RotaProtegida from './components/RotaProtegida';
 
@@ -19,6 +21,8 @@ function App() {
           <Routes>
             <Route path="/login" element={<LoginCliente />} />
             <Route path="/admin/login" element={<LoginAdmin />} />
+            <Route path="/recuperar-senha" element={<RecuperarSenha />} />
+            <Route path="/redefinir-senha" element={<RedefinirSenha />} />
             <Route
               path="/"
               element={

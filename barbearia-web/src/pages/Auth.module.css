@@ -84,6 +84,38 @@
   margin-bottom: 1rem;
 }
 
+.status {
+  font-size: 0.8125rem;
+  color: var(--plataforma-texto);
+  margin-bottom: 1rem;
+}
+
+.abas {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.aba {
+  flex: 1;
+  background: var(--plataforma-fundo);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--plataforma-texto-secundario);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.abaAtiva {
+  color: var(--plataforma-texto);
+  border-color: var(--plataforma-foco);
+}
+
 .rodape {
   text-align: center;
   margin-top: 1.5rem;

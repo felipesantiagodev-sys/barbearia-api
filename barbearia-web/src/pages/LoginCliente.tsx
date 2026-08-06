@@ -67,6 +67,10 @@ export default function LoginCliente() {
             </p>
           )}
 
+          <p className={styles.rodape} style={{ marginTop: 0, marginBottom: '1rem', textAlign: 'right' }}>
+            <Link to="/recuperar-senha">Esqueci minha senha</Link>
+          </p>
+
           <button className={styles.botao} type="submit">
             Entrar
           </button>
