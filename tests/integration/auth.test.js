@@ -5,10 +5,19 @@ const { pool, limparBanco, fecharBanco } = require('../helpers/db');
 const { criarBarbearia, criarClienteDireto, criarAdminDireto } = require('../helpers/factories');
 const { pool: poolTenant } = require('../../src/middlewares/tenant');
 const poolApp = require('../../src/config/database');
+const { limitadorEsqueciSenha } = require('../../src/middlewares/rateLimiters');
+const { ipKeyGenerator } = require('express-rate-limit');
+
+// `limitadorEsqueciSenha` (3/hora) é um singleton do express-rate-limit com
+// estado em memória compartilhado por todos os testes deste processo --
+// mesma situação documentada em tests/integration/onboarding.test.js.
+// resetKey zera a contagem entre testes sem alterar `max`/`windowMs`.
+const CHAVE_IP_TESTE = ipKeyGenerator('::ffff:127.0.0.1');
 
 describe('Autenticação multi-tenant', () => {
   afterEach(async () => {
     await limparBanco();
+    limitadorEsqueciSenha.resetKey(CHAVE_IP_TESTE);
   });
 
   afterAll(async () => {
@@ -250,6 +259,94 @@ describe('Autenticação multi-tenant', () => {
       const resposta = await request(app)
         .post('/auth/admin/redefinir-senha')
         .send({ token: 'nao-e-um-uuid', senha_nova: 'novaSenha123' });
+
+      expect(resposta.status).toBe(400);
+    });
+  });
+
+  describe('POST /auth/cliente/esqueci-senha', () => {
+    test('responde 200 genérico para email existente e gera token', async () => {
+      const barbearia = await criarBarbearia('Barbearia Reset Cliente');
+      const cliente = await criarClienteDireto(barbearia.id, { email: 'cliente.reset@teste.com' });
+
+      const resposta = await request(app)
+        .post('/auth/cliente/esqueci-senha')
+        .send({ email: 'cliente.reset@teste.com' });
+
+      expect(resposta.status).toBe(200);
+
+      const client = await pool.connect();
+      let verificacao;
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
+        verificacao = await client.query('SELECT token_reset_senha FROM cliente WHERE id = $1', [cliente.id]);
+        await client.query('ROLLBACK');
+      } finally {
+        client.release();
+      }
+      expect(verificacao.rows[0].token_reset_senha).not.toBeNull();
+    });
+
+    test('responde 200 genérico mesmo para email inexistente', async () => {
+      const resposta = await request(app)
+        .post('/auth/cliente/esqueci-senha')
+        .send({ email: 'nao-existe-cliente@teste.com' });
+
+      expect(resposta.status).toBe(200);
+    });
+  });
+
+  describe('POST /auth/cliente/redefinir-senha', () => {
+    test('redefine a senha com token válido e invalida o token', async () => {
+      const barbearia = await criarBarbearia('Barbearia Redefine Cliente');
+      const cliente = await criarClienteDireto(barbearia.id, { email: 'cliente.redefine@teste.com' });
+      const token = 'b0000000-0000-4000-8000-000000000001';
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia.id)]);
+        await client.query(
+          `UPDATE cliente SET token_reset_senha = $1, token_reset_senha_expira_em = now() + interval '1 hour' WHERE id = $2`,
+          [token, cliente.id]
+        );
+        await client.query('COMMIT');
+      } finally {
+        client.release();
+      }
+
+      const resposta = await request(app)
+        .post('/auth/cliente/redefinir-senha')
+        .send({ token, senha_nova: 'novaSenhaCliente123' });
+
+      expect(resposta.status).toBe(200);
+
+      const loginComNovaSenha = await request(app)
+        .post('/auth/cliente/login')
+        .send({ email: 'cliente.redefine@teste.com', senha: 'novaSenhaCliente123' });
+      expect(loginComNovaSenha.status).toBe(200);
+    });
+
+    test('rejeita token expirado', async () => {
+      const barbearia = await criarBarbearia('Barbearia Cliente Token Expirado');
+      const cliente = await criarClienteDireto(barbearia.id, { email: 'cliente.expirado@teste.com' });
+      const token = 'b0000000-0000-4000-8000-000000000002';
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia.id)]);
+        await client.query(
+          `UPDATE cliente SET token_reset_senha = $1, token_reset_senha_expira_em = now() - interval '1 hour' WHERE id = $2`,
+          [token, cliente.id]
+        );
+        await client.query('COMMIT');
+      } finally {
+        client.release();
+      }
+
+      const resposta = await request(app)
+        .post('/auth/cliente/redefinir-senha')
+        .send({ token, senha_nova: 'novaSenhaCliente123' });
 
       expect(resposta.status).toBe(400);
     });

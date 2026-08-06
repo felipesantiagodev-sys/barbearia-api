@@ -226,4 +226,81 @@ async function redefinirSenhaAdmin(req, res) {
   }
 }
 
-module.exports = { cadastrarAdmin, loginAdmin, loginCliente, esqueciSenhaAdmin, redefinirSenhaAdmin };
+async function esqueciSenhaCliente(req, res) {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ erro: 'email é obrigatório' });
+  }
+
+  try {
+    const resultado = await buscarComoPlataforma(
+      'SELECT c.*, b.nome AS nome_barbearia FROM cliente c JOIN barbearia b ON b.id = c.barbearia_id WHERE c.email = $1',
+      [email]
+    );
+
+    for (const cliente of resultado.rows) {
+      const tokenReset = crypto.randomUUID();
+      await executarComoPlataforma(
+        `UPDATE cliente SET token_reset_senha = $1, token_reset_senha_expira_em = now() + interval '${HORAS_EXPIRACAO_TOKEN_RESET} hours' WHERE id = $2`,
+        [tokenReset, cliente.id]
+      );
+
+      try {
+        await enviarEmailRedefinicaoSenha(cliente.email, cliente.nome_barbearia, tokenReset, 'cliente');
+      } catch (erroEnvio) {
+        console.error('Falha ao enviar email de redefinição de senha (cliente):', erroEnvio);
+      }
+    }
+
+    res.json({ mensagem: 'Se esse email estiver cadastrado, você vai receber um link de redefinição.' });
+  } catch (erro) {
+    console.error(erro);
+    res.status(500).json({ erro: 'Erro ao processar solicitação' });
+  }
+}
+
+async function redefinirSenhaCliente(req, res) {
+  const { token, senha_nova } = req.body;
+
+  if (!token || !senha_nova) {
+    return res.status(400).json({ erro: 'token e senha_nova são obrigatórios' });
+  }
+
+  try {
+    const resultado = await buscarComoPlataforma(
+      `SELECT * FROM cliente WHERE token_reset_senha = $1 AND token_reset_senha_expira_em > now()`,
+      [token]
+    );
+
+    if (resultado.rows.length === 0) {
+      return res.status(400).json({ erro: 'Token inválido ou expirado' });
+    }
+
+    const cliente = resultado.rows[0];
+    const senha_hash = await bcrypt.hash(senha_nova, 10);
+
+    await executarComoPlataforma(
+      `UPDATE cliente SET senha_hash = $1, token_reset_senha = NULL, token_reset_senha_expira_em = NULL WHERE id = $2`,
+      [senha_hash, cliente.id]
+    );
+
+    res.json({ mensagem: 'Senha redefinida com sucesso. Você já pode fazer login.' });
+  } catch (erro) {
+    if (erro.code === '22P02') {
+      return res.status(400).json({ erro: 'Token inválido ou expirado' });
+    }
+    console.error(erro);
+    res.status(500).json({ erro: 'Erro ao redefinir senha' });
+  }
+}
+
+module.exports = {
+  cadastrarAdmin,
+  loginAdmin,
+  loginCliente,
+  esqueciSenhaAdmin,
+  redefinirSenhaAdmin,
+  esqueciSenhaCliente,
+  redefinirSenhaCliente,
+};
