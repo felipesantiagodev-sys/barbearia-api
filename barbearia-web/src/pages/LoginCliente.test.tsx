@@ -60,4 +60,29 @@ describe('LoginCliente', () => {
       expect(screen.getByText('Email ou senha inválidos')).toBeInTheDocument();
     });
   });
+
+  test('mostra mensagem de bloqueio com link para recuperação quando a conta está bloqueada', async () => {
+    vi.spyOn(authApi, 'loginCliente').mockRejectedValue(
+      Object.assign(new Error('Conta bloqueada por muitas tentativas. Redefina sua senha para continuar.'), {
+        bloqueado: true,
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <LoginCliente />
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await userEvent.type(screen.getByLabelText(/email/i), 'cliente@teste.com');
+    await userEvent.type(screen.getByLabelText(/senha/i), 'senhaErrada');
+    await userEvent.click(screen.getByRole('button', { name: /entrar/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/conta bloqueada/i)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('link', { name: /redefinir senha/i })).toHaveAttribute('href', '/recuperar-senha');
+  });
 });

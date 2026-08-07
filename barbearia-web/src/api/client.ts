@@ -13,6 +13,16 @@ export function setToken(token: string | null): void {
   }
 }
 
+export class ErroApi extends Error {
+  bloqueado: boolean;
+
+  constructor(mensagem: string, bloqueado: boolean) {
+    super(mensagem);
+    this.name = 'ErroApi';
+    this.bloqueado = bloqueado;
+  }
+}
+
 async function requisicao<T>(
   metodo: 'GET' | 'POST' | 'PUT',
   caminho: string,
@@ -36,7 +46,8 @@ async function requisicao<T>(
     const mensagemErro = dados && typeof dados === 'object' && 'erro' in dados
       ? String((dados as { erro: unknown }).erro)
       : `Erro na requisição (${resposta.status})`;
-    throw new Error(mensagemErro);
+    const bloqueado = Boolean(dados && typeof dados === 'object' && 'bloqueado' in dados && (dados as { bloqueado: unknown }).bloqueado);
+    throw new ErroApi(mensagemErro, bloqueado);
   }
 
   return dados as T;
