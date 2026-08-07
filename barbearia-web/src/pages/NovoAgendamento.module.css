@@ -1,0 +1,71 @@
+.pagina {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.titulo {
+  font-family: var(--fonte-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.opcao {
+  background: var(--plataforma-superficie);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  text-align: left;
+  cursor: pointer;
+  color: var(--plataforma-texto);
+  font-size: 0.9375rem;
+}
+
+.opcao:hover {
+  border-color: var(--plataforma-foco);
+}
+
+.opcaoSelecionada {
+  border-color: var(--cor-primaria, var(--plataforma-foco));
+}
+
+.botao {
+  width: 100%;
+  background: var(--plataforma-texto);
+  color: var(--plataforma-fundo);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resumo {
+  background: var(--plataforma-superficie);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.resumoLinha {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  padding: 0.375rem 0;
+}
+
+.erro {
+  font-size: 0.8125rem;
+  color: #f87171;
+  margin-bottom: 1rem;
+}

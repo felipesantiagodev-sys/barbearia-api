@@ -6,6 +6,7 @@ import LoginAdmin from './pages/LoginAdmin';
 import RecuperarSenha from './pages/RecuperarSenha';
 import RedefinirSenha from './pages/RedefinirSenha';
 import Home from './pages/Home';
+import NovoAgendamento from './pages/NovoAgendamento';
 import RotaProtegida from './components/RotaProtegida';
 
 function AreaComTema({ children }: { children: React.ReactNode }) {
@@ -28,6 +29,14 @@ function App() {
               element={
                 <RotaProtegida>
                   <Home />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/novo-agendamento"
+              element={
+                <RotaProtegida>
+                  <NovoAgendamento />
                 </RotaProtegida>
               }
             />
