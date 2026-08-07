@@ -1,0 +1,77 @@
+.pagina {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.titulo {
+  font-family: var(--fonte-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.abas {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.aba {
+  flex: 1;
+  background: var(--plataforma-fundo);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.5rem;
+  padding: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--plataforma-texto-secundario);
+  cursor: pointer;
+}
+
+.abaAtiva {
+  color: var(--plataforma-texto);
+  border-color: var(--cor-primaria, var(--plataforma-foco));
+}
+
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.card {
+  background: var(--plataforma-superficie);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.data {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.status {
+  font-size: 0.75rem;
+  color: var(--plataforma-texto-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.botaoCancelar {
+  margin-top: 0.75rem;
+  background: transparent;
+  border: 1px solid var(--plataforma-borda);
+  color: var(--plataforma-texto-secundario);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.vazio {
+  font-size: 0.875rem;
+  color: var(--plataforma-texto-secundario);
+}
