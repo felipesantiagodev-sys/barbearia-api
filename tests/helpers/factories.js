@@ -187,6 +187,34 @@ async function criarBarbeiroDireto(barbearia_id, unidade_id, overrides = {}) {
   }
 }
 
+// `assinatura` também tem RLS com FORCE ROW LEVEL SECURITY (migration 005).
+async function criarAssinaturaDireto(barbearia_id, cliente_id, plano_id, overrides = {}) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia_id)]);
+    const r = await client.query(
+      `INSERT INTO assinatura (barbearia_id, cliente_id, plano_id, status, data_inicio, proxima_cobranca)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [
+        barbearia_id,
+        cliente_id,
+        plano_id,
+        overrides.status || 'ativa',
+        overrides.data_inicio || new Date().toISOString().slice(0, 10),
+        overrides.proxima_cobranca || null,
+      ]
+    );
+    await client.query('COMMIT');
+    return r.rows[0];
+  } catch (erro) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw erro;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   criarBarbearia,
   criarClienteDireto,
@@ -195,4 +223,5 @@ module.exports = {
   criarServicoDireto,
   criarPlanoDireto,
   criarBarbeiroDireto,
+  criarAssinaturaDireto,
 };

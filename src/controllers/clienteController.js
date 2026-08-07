@@ -97,4 +97,38 @@ async function buscarClientePorId(req, res) {
   }
 }
 
-module.exports = { criarClientePublico, listarClientes, buscarClientePorId };
+// Escopado por `escoparTenant` + autenticado como cliente: `req.usuario.id` é
+// o id do próprio cliente logado (do JWT), então a busca não precisa (nem
+// deve) receber esse id via parâmetro -- evita que um cliente consulte a
+// assinatura de outro. `req.db` já filtra por tenant via RLS.
+async function buscarMinhaAssinatura(req, res) {
+  const clienteId = req.usuario.id;
+
+  try {
+    const resultado = await req.db.query(
+      `SELECT a.id, a.status, a.data_inicio, a.proxima_cobranca, p.nome AS plano_nome, p.valor_mensal
+       FROM assinatura a
+       JOIN plano p ON p.id = a.plano_id
+       WHERE a.cliente_id = $1 AND a.status = 'ativa'`,
+      [clienteId]
+    );
+
+    if (resultado.rows.length === 0) {
+      return res.json(null);
+    }
+
+    const linha = resultado.rows[0];
+    res.json({
+      id: linha.id,
+      status: linha.status,
+      data_inicio: linha.data_inicio,
+      proxima_cobranca: linha.proxima_cobranca,
+      plano: { nome: linha.plano_nome, valor_mensal: linha.valor_mensal },
+    });
+  } catch (erro) {
+    console.error(erro);
+    res.status(500).json({ erro: 'Erro ao buscar assinatura' });
+  }
+}
+
+module.exports = { criarClientePublico, listarClientes, buscarClientePorId, buscarMinhaAssinatura };

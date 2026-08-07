@@ -1,7 +1,8 @@
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 const app = require('../../src/app');
 const { limparBanco, fecharBanco } = require('../helpers/db');
-const { criarBarbearia } = require('../helpers/factories');
+const { criarBarbearia, criarClienteDireto, criarPlanoDireto, criarAssinaturaDireto } = require('../helpers/factories');
 const { pool: poolTenant } = require('../../src/middlewares/tenant');
 const poolApp = require('../../src/config/database');
 
@@ -94,5 +95,75 @@ describe('POST /barbearias/:barbearia_id/clientes', () => {
       .send({ nome: 'Cliente Inválido', email: 'invalido@teste.com', senha: 'senha123' });
 
     expect(resposta.status).toBe(400);
+  });
+
+  // Aninhado dentro do describe pai porque o `afterAll` acima fecha os pools
+  // compartilhados (poolTenant, poolApp) -- um describe irmão rodaria depois
+  // desse afterAll e falharia com "Cannot use a pool after calling end".
+  // Mesma situação já resolvida na Task 1.
+  describe('GET /clientes/me/assinatura', () => {
+    afterEach(async () => {
+      await limparBanco();
+    });
+
+    test('retorna a assinatura ativa do cliente logado, com dados do plano', async () => {
+      const barbearia = await criarBarbearia('Barbearia Assinatura');
+      const cliente = await criarClienteDireto(barbearia.id, { email: 'cliente.assinatura@teste.com' });
+      const plano = await criarPlanoDireto(barbearia.id, { nome: 'Plano Premium', valor_mensal: 149.9 });
+      await criarAssinaturaDireto(barbearia.id, cliente.id, plano.id);
+
+      const token = jwt.sign(
+        { id: cliente.id, tipo: 'cliente', barbearia_id: barbearia.id },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      const resposta = await request(app)
+        .get('/clientes/me/assinatura')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(resposta.status).toBe(200);
+      expect(resposta.body.plano.nome).toBe('Plano Premium');
+      expect(Number(resposta.body.plano.valor_mensal)).toBe(149.9);
+      expect(resposta.body.status).toBe('ativa');
+    });
+
+    test('retorna null quando o cliente não tem assinatura ativa', async () => {
+      const barbearia = await criarBarbearia('Barbearia Sem Assinatura');
+      const cliente = await criarClienteDireto(barbearia.id, { email: 'cliente.sem.assinatura@teste.com' });
+
+      const token = jwt.sign(
+        { id: cliente.id, tipo: 'cliente', barbearia_id: barbearia.id },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      const resposta = await request(app)
+        .get('/clientes/me/assinatura')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(resposta.status).toBe(200);
+      expect(resposta.body).toBeNull();
+    });
+
+    test('ignora assinatura cancelada, retornando null', async () => {
+      const barbearia = await criarBarbearia('Barbearia Assinatura Cancelada');
+      const cliente = await criarClienteDireto(barbearia.id, { email: 'cliente.cancelada@teste.com' });
+      const plano = await criarPlanoDireto(barbearia.id);
+      await criarAssinaturaDireto(barbearia.id, cliente.id, plano.id, { status: 'cancelada' });
+
+      const token = jwt.sign(
+        { id: cliente.id, tipo: 'cliente', barbearia_id: barbearia.id },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      const resposta = await request(app)
+        .get('/clientes/me/assinatura')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(resposta.status).toBe(200);
+      expect(resposta.body).toBeNull();
+    });
   });
 });
