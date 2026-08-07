@@ -432,6 +432,31 @@ describe('Autenticação multi-tenant', () => {
         .send({ email: 'admin.desbloqueio@teste.com', senha: 'senhaNovaDesbloqueio123' });
       expect(loginPosRedefinicao.status).toBe(200);
     });
+
+    test('senha errada contra email compartilhado por duas barbearias bloqueia ambas as contas', async () => {
+      const barbeariaA = await criarBarbearia('Barbearia Compartilhada Admin A');
+      const barbeariaB = await criarBarbearia('Barbearia Compartilhada Admin B');
+      await criarAdminDireto(barbeariaA.id, { email: 'admin.compartilhado@teste.com', senha: 'senhaCorretaA123' });
+      await criarAdminDireto(barbeariaB.id, { email: 'admin.compartilhado@teste.com', senha: 'senhaCorretaB123' });
+
+      for (let tentativa = 0; tentativa < 5; tentativa++) {
+        await request(app)
+          .post('/auth/admin/login')
+          .send({ email: 'admin.compartilhado@teste.com', senha: 'senhaErrada' });
+      }
+
+      const respostaA = await request(app)
+        .post('/auth/admin/login')
+        .send({ email: 'admin.compartilhado@teste.com', senha: 'senhaCorretaA123' });
+      expect(respostaA.status).toBe(423);
+      expect(respostaA.body.bloqueado).toBe(true);
+
+      const respostaB = await request(app)
+        .post('/auth/admin/login')
+        .send({ email: 'admin.compartilhado@teste.com', senha: 'senhaCorretaB123' });
+      expect(respostaB.status).toBe(423);
+      expect(respostaB.body.bloqueado).toBe(true);
+    });
   });
 
   describe('Bloqueio de login por tentativas (cliente)', () => {
@@ -513,6 +538,31 @@ describe('Autenticação multi-tenant', () => {
         .post('/auth/cliente/login')
         .send({ email: 'cliente.desbloqueio@teste.com', senha: 'senhaNovaDesbloqueio123' });
       expect(loginPosRedefinicao.status).toBe(200);
+    });
+
+    test('senha errada contra email compartilhado por duas barbearias bloqueia ambas as contas', async () => {
+      const barbeariaA = await criarBarbearia('Barbearia Compartilhada Cliente A');
+      const barbeariaB = await criarBarbearia('Barbearia Compartilhada Cliente B');
+      await criarClienteDireto(barbeariaA.id, { email: 'cliente.compartilhado@teste.com', senha: 'senhaCorretaA123' });
+      await criarClienteDireto(barbeariaB.id, { email: 'cliente.compartilhado@teste.com', senha: 'senhaCorretaB123' });
+
+      for (let tentativa = 0; tentativa < 5; tentativa++) {
+        await request(app)
+          .post('/auth/cliente/login')
+          .send({ email: 'cliente.compartilhado@teste.com', senha: 'senhaErrada' });
+      }
+
+      const respostaA = await request(app)
+        .post('/auth/cliente/login')
+        .send({ email: 'cliente.compartilhado@teste.com', senha: 'senhaCorretaA123' });
+      expect(respostaA.status).toBe(423);
+      expect(respostaA.body.bloqueado).toBe(true);
+
+      const respostaB = await request(app)
+        .post('/auth/cliente/login')
+        .send({ email: 'cliente.compartilhado@teste.com', senha: 'senhaCorretaB123' });
+      expect(respostaB.status).toBe(423);
+      expect(respostaB.body.bloqueado).toBe(true);
     });
   });
 });
