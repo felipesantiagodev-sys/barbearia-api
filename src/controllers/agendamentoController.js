@@ -415,10 +415,70 @@ async function reagendarAgendamento(req, res) {
   }
 }
 
+// Lista os agendamentos do próprio cliente autenticado, filtrados por
+// status=agendados (confirmados e ainda no futuro) ou status=anteriores
+// (qualquer outro status, ou confirmado mas com data já passada). Sem o
+// parâmetro `status`, retorna todos os agendamentos do cliente.
+//
+// `filtroCondicao` é interpolado como string fixa (não vem de input do
+// usuário -- `status` só controla qual dos 2 blocos de texto fixo é usado,
+// `clienteId` continua parametrizado com $1), então não há risco de SQL
+// injection aqui.
+//
+// Isolamento entre clientes: `req.db` já está escopado por RLS para o tenant
+// (barbearia_id) do usuário autenticado, e a query ainda filtra
+// explicitamente por `a.cliente_id = $1` usando `req.usuario.id` -- um
+// cliente nunca enxerga agendamentos de outro cliente, mesmo da mesma
+// barbearia.
+async function listarMeusAgendamentos(req, res) {
+  const { status } = req.query;
+  const clienteId = req.usuario.id;
+
+  try {
+    let filtroCondicao;
+    let ordem;
+
+    if (status === 'agendados') {
+      filtroCondicao = `AND a.status = 'confirmado' AND a.data_hora_inicio > now()`;
+      ordem = 'ASC';
+    } else if (status === 'anteriores') {
+      filtroCondicao = `AND (a.status != 'confirmado' OR a.data_hora_inicio <= now())`;
+      ordem = 'DESC';
+    } else {
+      filtroCondicao = '';
+      ordem = 'DESC';
+    }
+
+    const agendamentosResultado = await req.db.query(
+      `SELECT a.* FROM agendamento a
+       WHERE a.cliente_id = $1 ${filtroCondicao}
+       ORDER BY a.data_hora_inicio ${ordem}`,
+      [clienteId]
+    );
+
+    const agendamentosComItens = [];
+    for (const agendamento of agendamentosResultado.rows) {
+      const itensResultado = await req.db.query(
+        'SELECT * FROM agendamento_servico WHERE agendamento_id = $1',
+        [agendamento.id]
+      );
+      const itens = itensResultado.rows;
+      const valorTotal = itens.reduce((soma, item) => soma + Number(item.valor_cobrado), 0);
+      agendamentosComItens.push({ ...agendamento, itens, valor_total: valorTotal });
+    }
+
+    res.json(agendamentosComItens);
+  } catch (erro) {
+    console.error(erro);
+    res.status(500).json({ erro: 'Erro ao listar agendamentos' });
+  }
+}
+
 module.exports = {
   listarHorariosDisponiveis,
   criarAgendamento,
   cancelarAgendamento,
   concluirAgendamento,
   reagendarAgendamento,
+  listarMeusAgendamentos,
 };

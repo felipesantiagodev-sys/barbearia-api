@@ -371,4 +371,126 @@ describe('agendamentoController com req.db', () => {
       expect(resposta.status).toBe(404);
     });
   });
+
+  // Testes da Task 1 do plano app-cliente-agendamento: GET /agendamentos/meus
+  // permite ao cliente autenticado listar os próprios agendamentos, filtrados
+  // por status=agendados (futuros e confirmados) ou status=anteriores
+  // (demais). Fica aninhado no describe principal (em vez de um describe
+  // top-level irmão) para compartilhar o mesmo afterEach/afterAll e não
+  // tentar usar `pool`/`poolTenant`/`poolApp` já encerrados pelo afterAll do
+  // describe principal.
+  describe('GET /agendamentos/meus', () => {
+    async function montarCenarioBasico() {
+      const barbearia = await criarBarbearia('Barbearia Meus Agendamentos');
+      const unidade = await criarUnidadeDireto(barbearia.id);
+      const barbeiro = await criarBarbeiroDireto(barbearia.id, unidade.id);
+      const servico = await criarServicoDireto(barbearia.id, { duracao_minutos: 30 });
+      const cliente = await criarClienteDireto(barbearia.id, { email: 'cliente.meus@teste.com' });
+      const token = jwt.sign(
+        { id: cliente.id, tipo: 'cliente', barbearia_id: barbearia.id },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+      return { barbearia, unidade, barbeiro, servico, cliente, token };
+    }
+
+    test('retorna só agendamentos futuros e confirmados quando status=agendados', async () => {
+      const { unidade, barbeiro, servico, cliente, token } = await montarCenarioBasico();
+
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      await request(app)
+        .post('/agendamentos')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          cliente_id: cliente.id,
+          barbeiro_id: barbeiro.id,
+          unidade_id: unidade.id,
+          data: amanha,
+          hora_inicio: '10:00',
+          servico_ids: [servico.id],
+        });
+
+      await request(app)
+        .post('/agendamentos')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          cliente_id: cliente.id,
+          barbeiro_id: barbeiro.id,
+          unidade_id: unidade.id,
+          data: ontem,
+          hora_inicio: '10:00',
+          servico_ids: [servico.id],
+        });
+
+      const resposta = await request(app)
+        .get('/agendamentos/meus?status=agendados')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(resposta.status).toBe(200);
+      expect(resposta.body).toHaveLength(1);
+      expect(new Date(resposta.body[0].data_hora_inicio).getTime()).toBeGreaterThan(Date.now());
+      expect(resposta.body[0].itens).toHaveLength(1);
+      expect(resposta.body[0].valor_total).toBeDefined();
+    });
+
+    test('retorna agendamento confirmado com data passada em anteriores, não em agendados', async () => {
+      const { unidade, barbeiro, servico, cliente, token } = await montarCenarioBasico();
+      const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      await request(app)
+        .post('/agendamentos')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          cliente_id: cliente.id,
+          barbeiro_id: barbeiro.id,
+          unidade_id: unidade.id,
+          data: ontem,
+          hora_inicio: '10:00',
+          servico_ids: [servico.id],
+        });
+
+      const respostaAgendados = await request(app)
+        .get('/agendamentos/meus?status=agendados')
+        .set('Authorization', `Bearer ${token}`);
+      expect(respostaAgendados.body).toHaveLength(0);
+
+      const respostaAnteriores = await request(app)
+        .get('/agendamentos/meus?status=anteriores')
+        .set('Authorization', `Bearer ${token}`);
+      expect(respostaAnteriores.body).toHaveLength(1);
+    });
+
+    test('um cliente nunca vê agendamentos de outro cliente, mesmo dentro da mesma barbearia', async () => {
+      const { barbearia, unidade, barbeiro, servico, cliente, token } = await montarCenarioBasico();
+      const outroCliente = await criarClienteDireto(barbearia.id, { email: 'outro.cliente@teste.com' });
+
+      const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+      await request(app)
+        .post('/agendamentos')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          cliente_id: outroCliente.id,
+          barbeiro_id: barbeiro.id,
+          unidade_id: unidade.id,
+          data: amanha,
+          hora_inicio: '10:00',
+          servico_ids: [servico.id],
+        });
+
+      const resposta = await request(app)
+        .get('/agendamentos/meus?status=agendados')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(resposta.status).toBe(200);
+      expect(resposta.body).toHaveLength(0);
+    });
+
+    test('rejeita sem token de autenticação', async () => {
+      const resposta = await request(app).get('/agendamentos/meus');
+      expect(resposta.status).toBe(401);
+    });
+  });
 });
