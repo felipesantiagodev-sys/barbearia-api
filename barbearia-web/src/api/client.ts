@@ -24,7 +24,7 @@ export class ErroApi extends Error {
 }
 
 async function requisicao<T>(
-  metodo: 'GET' | 'POST' | 'PUT',
+  metodo: 'GET' | 'POST' | 'PUT' | 'PATCH',
   caminho: string,
   corpo?: unknown
 ): Promise<T> {
@@ -57,4 +57,5 @@ export const apiClient = {
   get: <T>(caminho: string) => requisicao<T>('GET', caminho),
   post: <T>(caminho: string, corpo: unknown) => requisicao<T>('POST', caminho, corpo),
   put: <T>(caminho: string, corpo: unknown) => requisicao<T>('PUT', caminho, corpo),
+  patch: <T>(caminho: string) => requisicao<T>('PATCH', caminho),
 };
