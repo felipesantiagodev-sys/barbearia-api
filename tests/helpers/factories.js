@@ -215,6 +215,52 @@ async function criarAssinaturaDireto(barbearia_id, cliente_id, plano_id, overrid
   }
 }
 
+// DECISÃO SOBRE RLS: o brief desta task partiu de uma leitura só de
+// migrations/000_schema_base.sql (onde `barbeiro_servico` não tem
+// `barbearia_id`), mas migrations posteriores mudam esse quadro:
+// migration 002 adiciona a coluna `barbearia_id` a `barbeiro_servico`,
+// migration 004 a torna NOT NULL, e migration 005 habilita
+// FORCE ROW LEVEL SECURITY com policy baseada nessa coluna. Confirmado
+// empiricamente (INSERT direto via pool.query sem set_config falha com
+// "viola a política de segurança no nível de linha"). Ou seja, `barbeiro_servico`
+// SE COMPORTA como as demais tabelas com RLS -- precisa do mesmo padrão de
+// transação dedicada com `set_config('app.tenant_id', ...)`.
+//
+// Para manter a assinatura de 2 parâmetros (barbeiro_id, servico_id) definida
+// no brief -- sem exigir que quem chama já saiba a barbearia_id -- resolvemos
+// o tenant a partir do próprio barbeiro_id dentro do helper, no mesmo padrão
+// usado por `listarHorariosDisponiveis` no controller: uma consulta inicial
+// com `app.is_plataforma` para descobrir a barbearia do barbeiro, seguida da
+// troca para `app.tenant_id` antes do INSERT.
+async function associarBarbeiroServico(barbeiro_id, servico_id) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
+
+    const barbeiroResultado = await client.query('SELECT barbearia_id FROM barbeiro WHERE id = $1', [barbeiro_id]);
+    if (barbeiroResultado.rows.length === 0) {
+      await client.query('ROLLBACK');
+      throw new Error(`Barbeiro ${barbeiro_id} não encontrado`);
+    }
+    const barbearia_id = barbeiroResultado.rows[0].barbearia_id;
+
+    await client.query("SELECT set_config('app.is_plataforma', '', true)");
+    await client.query('SELECT set_config($1, $2, true)', ['app.tenant_id', String(barbearia_id)]);
+
+    await client.query(
+      'INSERT INTO barbeiro_servico (barbearia_id, barbeiro_id, servico_id) VALUES ($1, $2, $3)',
+      [barbearia_id, barbeiro_id, servico_id]
+    );
+    await client.query('COMMIT');
+  } catch (erro) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw erro;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   criarBarbearia,
   criarClienteDireto,
@@ -224,4 +270,5 @@ module.exports = {
   criarPlanoDireto,
   criarBarbeiroDireto,
   criarAssinaturaDireto,
+  associarBarbeiroServico,
 };

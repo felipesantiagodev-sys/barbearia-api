@@ -26,6 +26,7 @@ const {
   criarServicoDireto,
   criarBarbeiroDireto,
   criarClienteDireto,
+  associarBarbeiroServico,
 } = require('../helpers/factories');
 const { pool: poolTenant } = require('../../src/middlewares/tenant');
 const poolApp = require('../../src/config/database');
@@ -54,6 +55,27 @@ async function inserirAgendamentoDireto(barbearia_id, { cliente_id, barbeiro_id,
     );
     await client.query('COMMIT');
     return r.rows[0];
+  } catch (erro) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw erro;
+  } finally {
+    client.release();
+  }
+}
+
+// `barbeiro_disponibilidade` também tem FORCE ROW LEVEL SECURITY (migration
+// 005), com `barbearia_id` próprio (migrations 002/004). Mesmo padrão de
+// transação dedicada usado em `inserirAgendamentoDireto` acima.
+async function inserirDisponibilidadeDireto(barbearia_id, { barbeiro_id, dia_semana, hora_inicio, hora_fim }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia_id)]);
+    await client.query(
+      'INSERT INTO barbeiro_disponibilidade (barbearia_id, barbeiro_id, dia_semana, hora_inicio, hora_fim) VALUES ($1, $2, $3, $4, $5)',
+      [barbearia_id, barbeiro_id, dia_semana, hora_inicio, hora_fim]
+    );
+    await client.query('COMMIT');
   } catch (erro) {
     await client.query('ROLLBACK').catch(() => {});
     throw erro;
@@ -491,6 +513,79 @@ describe('agendamentoController com req.db', () => {
     test('rejeita sem token de autenticação', async () => {
       const resposta = await request(app).get('/agendamentos/meus');
       expect(resposta.status).toBe(401);
+    });
+  });
+
+  // Testes da Task 3 do plano app-cliente-agendamento: rota pública que
+  // agrega disponibilidade de múltiplos barbeiros para quem não tem
+  // preferência de barbeiro específico. Segue o mesmo padrão de resolução de
+  // tenant de `listarHorariosDisponiveis`, mas partindo de `unidade_id` em
+  // vez de `barbeiro_id`.
+  describe('GET /agendamentos/horarios-disponiveis-qualquer-barbeiro', () => {
+    test('retorna slots de qualquer barbeiro que atenda todos os serviços pedidos', async () => {
+      const barbearia = await criarBarbearia('Barbearia Qualquer Barbeiro');
+      const unidade = await criarUnidadeDireto(barbearia.id);
+      const barbeiroA = await criarBarbeiroDireto(barbearia.id, unidade.id, { nome: 'Barbeiro A' });
+      const barbeiroB = await criarBarbeiroDireto(barbearia.id, unidade.id, { nome: 'Barbeiro B' });
+      const servico = await criarServicoDireto(barbearia.id, { duracao_minutos: 30 });
+
+      await associarBarbeiroServico(barbeiroA.id, servico.id);
+      await associarBarbeiroServico(barbeiroB.id, servico.id);
+
+      // Disponibilidade: barbeiro A trabalha 08h-12h todo dia da semana testado;
+      // barbeiro B não tem nenhuma disponibilidade cadastrada (não deve aparecer).
+      const diaSemana = new Date().getDay();
+      await inserirDisponibilidadeDireto(barbearia.id, {
+        barbeiro_id: barbeiroA.id,
+        dia_semana: diaSemana,
+        hora_inicio: '08:00',
+        hora_fim: '12:00',
+      });
+
+      const hoje = new Date().toISOString().slice(0, 10);
+
+      const resposta = await request(app).get(
+        `/agendamentos/horarios-disponiveis-qualquer-barbeiro?unidade_id=${unidade.id}&servico_ids=${servico.id}&data=${hoje}`
+      );
+
+      expect(resposta.status).toBe(200);
+      expect(resposta.body.length).toBeGreaterThan(0);
+      expect(resposta.body[0]).toHaveProperty('inicio');
+      expect(resposta.body[0]).toHaveProperty('fim_atendimento');
+      expect(resposta.body[0].barbeiro_id).toBe(barbeiroA.id);
+    });
+
+    test('não retorna slots de barbeiro que não atende todos os serviços pedidos', async () => {
+      const barbearia = await criarBarbearia('Barbearia Parcial');
+      const unidade = await criarUnidadeDireto(barbearia.id);
+      const barbeiro = await criarBarbeiroDireto(barbearia.id, unidade.id);
+      const servicoA = await criarServicoDireto(barbearia.id, { nome: 'Corte', duracao_minutos: 30 });
+      const servicoB = await criarServicoDireto(barbearia.id, { nome: 'Barba', duracao_minutos: 20 });
+
+      // Barbeiro só atende servicoA, não servicoB.
+      await associarBarbeiroServico(barbeiro.id, servicoA.id);
+
+      const diaSemana = new Date().getDay();
+      await inserirDisponibilidadeDireto(barbearia.id, {
+        barbeiro_id: barbeiro.id,
+        dia_semana: diaSemana,
+        hora_inicio: '08:00',
+        hora_fim: '12:00',
+      });
+
+      const hoje = new Date().toISOString().slice(0, 10);
+
+      const resposta = await request(app).get(
+        `/agendamentos/horarios-disponiveis-qualquer-barbeiro?unidade_id=${unidade.id}&servico_ids=${servicoA.id},${servicoB.id}&data=${hoje}`
+      );
+
+      expect(resposta.status).toBe(200);
+      expect(resposta.body).toHaveLength(0);
+    });
+
+    test('retorna 400 se faltar algum query param obrigatório', async () => {
+      const resposta = await request(app).get('/agendamentos/horarios-disponiveis-qualquer-barbeiro?data=2026-08-10');
+      expect(resposta.status).toBe(400);
     });
   });
 });

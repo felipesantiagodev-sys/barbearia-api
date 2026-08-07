@@ -7,6 +7,7 @@ const {
   concluirAgendamento,
   reagendarAgendamento,
   listarMeusAgendamentos,
+  listarHorariosDisponiveisQualquerBarbeiro,
 } = require('../controllers/agendamentoController');
 const { verificarToken, apenasAdmin } = require('../middlewares/autenticacao');
 const { escoparTenant } = require('../middlewares/tenant');
@@ -15,6 +16,10 @@ const { escoparTenant } = require('../middlewares/tenant');
 // conta. O escopo de tenant é resolvido dentro do próprio controller a
 // partir do barbeiro_id -- ver comentário em listarHorariosDisponiveis.
 router.get('/horarios-disponiveis', listarHorariosDisponiveis);
+// Também pública, mesmo motivo: agrega disponibilidade de vários barbeiros
+// de uma unidade para quem ainda não escolheu barbeiro. Resolve o tenant a
+// partir de unidade_id -- ver comentário em listarHorariosDisponiveisQualquerBarbeiro.
+router.get('/horarios-disponiveis-qualquer-barbeiro', listarHorariosDisponiveisQualquerBarbeiro);
 // `/meus` precisa vir antes de qualquer rota com `:id` só se houvesse
 // conflito de padrão -- aqui não há (não colide com `/:id/cancelar` etc.),
 // mas mantemos a ordem acima por clareza.

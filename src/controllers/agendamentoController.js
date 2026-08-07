@@ -474,6 +474,145 @@ async function listarMeusAgendamentos(req, res) {
   }
 }
 
+// Rota pública (Task 3 do plano app-cliente-agendamento): agrega
+// disponibilidade de TODOS os barbeiros de uma unidade que atendam,
+// simultaneamente, todos os servico_ids pedidos -- para o cliente que não
+// tem preferência de barbeiro específico. Mesmo padrão de resolução de
+// tenant de `listarHorariosDisponiveis` (transação dedicada com
+// app.is_plataforma para descobrir o tenant a partir de um id que não é
+// barbearia_id, seguido da troca para app.tenant_id), mas partindo de
+// unidade_id em vez de barbeiro_id, e iterando sobre múltiplos barbeiros
+// candidatos em vez de um único.
+//
+// Quando dois ou mais barbeiros candidatos têm o mesmo horário livre, só o
+// primeiro (na ordem retornada pela query de candidatos) "vence" aquele
+// slot na resposta -- a lista final não duplica horários, só ids de
+// barbeiro.
+async function listarHorariosDisponiveisQualquerBarbeiro(req, res) {
+  const { unidade_id, servico_ids: servicoIdsRaw, data } = req.query;
+
+  if (!unidade_id || !servicoIdsRaw || !data) {
+    return res.status(400).json({ erro: 'unidade_id, servico_ids e data são obrigatórios' });
+  }
+
+  const servicoIds = servicoIdsRaw.split(',').map((id) => Number(id));
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.is_plataforma', 'true', true)");
+
+    const unidadeResultado = await client.query('SELECT barbearia_id FROM unidade WHERE id = $1', [unidade_id]);
+    if (unidadeResultado.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Unidade não encontrada' });
+    }
+    const barbearia_id = unidadeResultado.rows[0].barbearia_id;
+
+    await client.query("SELECT set_config('app.is_plataforma', '', true)");
+    await client.query('SELECT set_config($1, $2, true)', ['app.tenant_id', String(barbearia_id)]);
+
+    // Barbeiros da unidade que atendem TODOS os serviços pedidos.
+    const candidatosResultado = await client.query(
+      `SELECT b.id, SUM(s.duracao_minutos) AS duracao_total
+       FROM barbeiro b
+       JOIN barbeiro_servico bs ON bs.barbeiro_id = b.id
+       JOIN servico s ON s.id = bs.servico_id
+       WHERE b.unidade_id = $1 AND b.ativo = true AND s.id = ANY($2::int[])
+       GROUP BY b.id
+       HAVING COUNT(DISTINCT bs.servico_id) = $3`,
+      [unidade_id, servicoIds, servicoIds.length]
+    );
+
+    if (candidatosResultado.rows.length === 0) {
+      await client.query('COMMIT');
+      return res.json([]);
+    }
+
+    const duracaoServicos = Number(candidatosResultado.rows[0].duracao_total);
+    const diaSemana = combinarDataHora(data, '00:00').getDay();
+    const slotsPorHorario = new Map();
+
+    for (const candidato of candidatosResultado.rows) {
+      const barbeiro_id = candidato.id;
+
+      const dispResultado = await client.query(
+        'SELECT hora_inicio, hora_fim FROM barbeiro_disponibilidade WHERE barbeiro_id = $1 AND dia_semana = $2',
+        [barbeiro_id, diaSemana]
+      );
+
+      let janelas = dispResultado.rows.map((linha) => ({
+        inicio: combinarDataHora(data, linha.hora_inicio),
+        fim: combinarDataHora(data, linha.hora_fim),
+      }));
+
+      const excResultado = await client.query(
+        'SELECT tipo, hora_inicio, hora_fim FROM barbeiro_excecao WHERE barbeiro_id = $1 AND data = $2',
+        [barbeiro_id, data]
+      );
+
+      for (const excecao of excResultado.rows) {
+        if (excecao.tipo === 'folga_total') {
+          janelas = [];
+        } else if (excecao.tipo === 'horario_extra') {
+          janelas.push({
+            inicio: combinarDataHora(data, excecao.hora_inicio),
+            fim: combinarDataHora(data, excecao.hora_fim),
+          });
+        } else if (excecao.tipo === 'bloqueio_parcial') {
+          const bloqueio = {
+            inicio: combinarDataHora(data, excecao.hora_inicio),
+            fim: combinarDataHora(data, excecao.hora_fim),
+          };
+          janelas = subtrairIntervalo(janelas, bloqueio);
+        }
+      }
+
+      const agResultado = await client.query(
+        `SELECT data_hora_inicio, data_hora_fim FROM agendamento
+         WHERE barbeiro_id = $1 AND data_hora_inicio::date = $2::date
+         AND status IN ('confirmado', 'concluido')
+         ORDER BY data_hora_inicio`,
+        [barbeiro_id, data]
+      );
+
+      for (const agendamento of agResultado.rows) {
+        const ocupado = {
+          inicio: new Date(agendamento.data_hora_inicio),
+          fim: new Date(agendamento.data_hora_fim),
+        };
+        janelas = subtrairIntervalo(janelas, ocupado);
+      }
+
+      const slots = gerarSlotsDisponiveis(janelas, duracaoServicos);
+
+      for (const slot of slots) {
+        const chave = slot.inicio.toISOString();
+        // Primeiro barbeiro disponível encontrado para aquele horário "vence"
+        // -- evita duplicar o mesmo horário uma vez por barbeiro candidato.
+        if (!slotsPorHorario.has(chave)) {
+          slotsPorHorario.set(chave, {
+            inicio: slot.inicio.toISOString(),
+            fim_atendimento: slot.fim_atendimento.toISOString(),
+            barbeiro_id,
+          });
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+
+    const slotsOrdenados = Array.from(slotsPorHorario.values()).sort((a, b) => a.inicio.localeCompare(b.inicio));
+    res.json(slotsOrdenados);
+  } catch (erro) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(erro);
+    res.status(500).json({ erro: 'Erro ao calcular horários disponíveis' });
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   listarHorariosDisponiveis,
   criarAgendamento,
@@ -481,4 +620,5 @@ module.exports = {
   concluirAgendamento,
   reagendarAgendamento,
   listarMeusAgendamentos,
+  listarHorariosDisponiveisQualquerBarbeiro,
 };
