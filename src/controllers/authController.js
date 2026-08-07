@@ -199,7 +199,43 @@ async function loginCliente(req, res) {
     }
 
     if (!clienteAutenticado) {
+      // DECISÃO DE PRODUTO (consciente, não descuido) — mesmo raciocínio de
+      // loginAdmin: o login não recebe barbearia_id, então não há como saber
+      // qual conta o usuário quis acessar quando o email tem múltiplas
+      // contas (uma por barbearia). Incrementamos tentativas_login_falhas em
+      // TODAS as contas candidatas com esse email numa única query (o
+      // incremento é feito no próprio SQL, então cada linha soma seu valor
+      // atual independentemente das demais, e o CASE decide o bloqueio por
+      // linha com base no valor já incrementado).
+      const idsCandidatos = resultado.rows.map((candidato) => candidato.id);
+      await executarComoPlataforma(
+        `UPDATE cliente
+         SET tentativas_login_falhas = tentativas_login_falhas + 1,
+             bloqueado_ate = CASE
+               WHEN tentativas_login_falhas + 1 >= 5 THEN now() + interval '100 years'
+               ELSE bloqueado_ate
+             END
+         WHERE id = ANY($1)`,
+        [idsCandidatos]
+      );
       return res.status(401).json({ erro: 'Email ou senha inválidos' });
+    }
+
+    // A checagem de bloqueado_ate fica aqui, depois da verificação de senha
+    // (ver loop acima), pelo mesmo raciocínio de loginAdmin: só avaliamos
+    // bloqueado_ate para quem já provou conhecer a senha.
+    if (clienteAutenticado.bloqueado_ate && new Date(clienteAutenticado.bloqueado_ate) > new Date()) {
+      return res.status(423).json({
+        erro: 'Conta bloqueada por muitas tentativas. Redefina sua senha para continuar.',
+        bloqueado: true,
+      });
+    }
+
+    if (clienteAutenticado.tentativas_login_falhas > 0) {
+      await executarComoPlataforma(
+        `UPDATE cliente SET tentativas_login_falhas = 0, bloqueado_ate = NULL WHERE id = $1`,
+        [clienteAutenticado.id]
+      );
     }
 
     const token = jwt.sign(
@@ -342,7 +378,10 @@ async function redefinirSenhaCliente(req, res) {
     const senha_hash = await bcrypt.hash(senha_nova, 10);
 
     await executarComoPlataforma(
-      `UPDATE cliente SET senha_hash = $1, token_reset_senha = NULL, token_reset_senha_expira_em = NULL WHERE id = $2`,
+      `UPDATE cliente
+       SET senha_hash = $1, token_reset_senha = NULL, token_reset_senha_expira_em = NULL,
+           tentativas_login_falhas = 0, bloqueado_ate = NULL
+       WHERE id = $2`,
       [senha_hash, cliente.id]
     );
 
