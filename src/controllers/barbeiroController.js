@@ -1,8 +1,20 @@
+// Suporta filtro opcional por `unidade_id` via query param (?unidade_id=X),
+// usado pelo wizard de agendamento (passo 2: "lista de barbeiros da unidade
+// escolhida" -- ver spec em
+// docs/superpowers/specs/2026-08-07-app-cliente-agendamento-design.md).
+// Sem `unidade_id`, mantém o comportamento anterior (todos os barbeiros
+// ativos do tenant) para não quebrar consumidores existentes da rota.
 async function listarBarbeiros(req, res) {
+  const { unidade_id } = req.query;
   try {
-    const resultado = await req.db.query(
-      'SELECT id, nome, email, telefone, foto_url, ativo FROM barbeiro WHERE ativo = true ORDER BY nome'
-    );
+    const resultado = unidade_id
+      ? await req.db.query(
+          'SELECT id, nome, email, telefone, foto_url, ativo, unidade_id FROM barbeiro WHERE ativo = true AND unidade_id = $1 ORDER BY nome',
+          [unidade_id]
+        )
+      : await req.db.query(
+          'SELECT id, nome, email, telefone, foto_url, ativo, unidade_id FROM barbeiro WHERE ativo = true ORDER BY nome'
+        );
     res.json(resultado.rows);
   } catch (erro) {
     console.error(erro);

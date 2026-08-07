@@ -311,6 +311,40 @@ describe('Controllers diversos (unidade, barbeiro, serviço, plano, financeiro) 
       expect(resposta.body).toHaveLength(1);
       expect(resposta.body[0].nome).toBe('Barbeiro A');
     });
+
+    // Finding 2 da revisão final de branch: o wizard de agendamento
+    // (barbearia-web/src/pages/NovoAgendamento.tsx, passo 2) precisa listar
+    // só os barbeiros da unidade escolhida no passo 1 -- ver spec em
+    // docs/superpowers/specs/2026-08-07-app-cliente-agendamento-design.md,
+    // seção "Fluxo de agendamento". Sem `unidade_id` na query, mantém o
+    // comportamento anterior (todos os barbeiros ativos do tenant).
+    test('filtra por unidade_id quando informado na query', async () => {
+      const barbearia = await criarBarbearia('Barbearia Unidades');
+      const admin = await criarAdminDireto(barbearia.id, { email: 'admin.unidades@teste.com' });
+
+      const unidade1 = await criarUnidadeDireto(barbearia.id, { nome: 'Unidade 1' });
+      const unidade2 = await criarUnidadeDireto(barbearia.id, { nome: 'Unidade 2' });
+
+      await criarBarbeiroDireto(barbearia.id, unidade1.id, { nome: 'Barbeiro Unidade 1' });
+      await criarBarbeiroDireto(barbearia.id, unidade2.id, { nome: 'Barbeiro Unidade 2' });
+
+      const token = tokenAdmin(admin, barbearia.id);
+
+      const respostaFiltrada = await request(app)
+        .get(`/barbeiros?unidade_id=${unidade1.id}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(respostaFiltrada.status).toBe(200);
+      expect(respostaFiltrada.body).toHaveLength(1);
+      expect(respostaFiltrada.body[0].nome).toBe('Barbeiro Unidade 1');
+
+      const respostaSemFiltro = await request(app)
+        .get('/barbeiros')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(respostaSemFiltro.status).toBe(200);
+      expect(respostaSemFiltro.body).toHaveLength(2);
+    });
   });
 
   describe('POST /barbeiros e associações (prova que req.db funciona em escrita, sem transação aninhada)', () => {

@@ -13,6 +13,7 @@ export interface Barbeiro {
   email: string | null;
   telefone: string | null;
   foto_url: string | null;
+  unidade_id?: number;
 }
 
 export interface Servico {
@@ -27,8 +28,9 @@ export function listarUnidades(): Promise<Unidade[]> {
   return apiClient.get<Unidade[]>('/unidades');
 }
 
-export function listarBarbeiros(): Promise<Barbeiro[]> {
-  return apiClient.get<Barbeiro[]>('/barbeiros');
+export function listarBarbeiros(unidadeId?: number): Promise<Barbeiro[]> {
+  const query = unidadeId !== undefined ? `?unidade_id=${unidadeId}` : '';
+  return apiClient.get<Barbeiro[]>(`/barbeiros${query}`);
 }
 
 export function listarServicosDoBarbeiro(barbeiroId: number): Promise<Servico[]> {
