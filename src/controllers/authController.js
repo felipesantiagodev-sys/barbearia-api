@@ -102,30 +102,53 @@ async function loginAdmin(req, res) {
     }
 
     if (!adminAutenticado) {
-      // Nenhuma das contas com esse email bateu a senha informada. Como não
-      // há tenant_id nesta etapa do fluxo (login é anterior ao contexto de
-      // tenant) para saber qual conta especificamente o usuário quis
-      // acessar, incrementamos tentativas_login_falhas em TODAS as contas
-      // candidatas com esse email — do contrário um atacante testando senha
-      // errada contra um email presente em várias barbearias nunca
-      // acionaria bloqueio em nenhuma delas.
-      for (const candidato of resultado.rows) {
-        const novasFalhas = candidato.tentativas_login_falhas + 1;
-        if (novasFalhas >= 5) {
-          await executarComoPlataforma(
-            `UPDATE usuario_admin SET tentativas_login_falhas = $1, bloqueado_ate = now() + interval '100 years' WHERE id = $2`,
-            [novasFalhas, candidato.id]
-          );
-        } else {
-          await executarComoPlataforma(
-            `UPDATE usuario_admin SET tentativas_login_falhas = $1 WHERE id = $2`,
-            [novasFalhas, candidato.id]
-          );
-        }
-      }
+      // DECISÃO DE PRODUTO (consciente, não descuido): nenhuma das contas
+      // com esse email bateu a senha informada. Como o login não recebe
+      // barbearia_id (é anterior ao contexto de tenant), não há como saber
+      // qual conta especificamente o usuário quis acessar — por isso
+      // incrementamos tentativas_login_falhas em TODAS as contas candidatas
+      // com esse email, não só a pretendida. Efeito colateral aceito: um
+      // usuário dono de contas em 2+ barbearias com o mesmo email pode ter
+      // a conta B bloqueada mesmo errando a senha só tentando entrar na
+      // conta A. Optamos por manter esse comportamento (em vez de, por
+      // exemplo, exigir barbearia_id no login ou rastrear tentativas por
+      // combinação email+barbearia) porque: (1) é simples e não muda a UX
+      // de login; (2) o cenário é raro — poucos usuários têm 2+ barbearias
+      // com o mesmo email; (3) quem for afetado ainda consegue desbloquear
+      // via "esqueci senha", que já identifica e envia link por conta
+      // individualmente. A alternativa (não bloquear nenhuma conta na
+      // ambiguidade) abriria brecha de força bruta em contas com email
+      // compartilhado entre barbearias.
+      // Uma única query/transação para todos os candidatos (em vez de um
+      // round-trip por conta): o incremento é feito no próprio SQL
+      // (tentativas_login_falhas + 1), então cada linha soma seu valor
+      // atual independentemente das demais, e o CASE decide o bloqueio por
+      // linha comparando o valor JÁ incrementado — preserva a semântica de
+      // "cada conta bloqueia com base no seu próprio contador" sem precisar
+      // de uma chamada por candidato.
+      const idsCandidatos = resultado.rows.map((candidato) => candidato.id);
+      await executarComoPlataforma(
+        `UPDATE usuario_admin
+         SET tentativas_login_falhas = tentativas_login_falhas + 1,
+             bloqueado_ate = CASE
+               WHEN tentativas_login_falhas + 1 >= 5 THEN now() + interval '100 years'
+               ELSE bloqueado_ate
+             END
+         WHERE id = ANY($1)`,
+        [idsCandidatos]
+      );
       return res.status(401).json({ erro: 'Email ou senha inválidos' });
     }
 
+    // A checagem de bloqueado_ate fica aqui, depois da verificação de senha,
+    // porque a ordem do brief original checava bloqueio ANTES da senha e
+    // por isso precisava de um segundo bcrypt.compare duplicado (para não
+    // vazar "conta bloqueada" antes de confirmar que a senha estava certa).
+    // Nessa versão isso é desnecessário: adminAutenticado só é setado
+    // quando a senha já bateu (ver loop acima), então chegar neste ponto já
+    // implica senha correta — um único bcrypt.compare é suficiente e a
+    // ordem (senha primeiro, bloqueio depois) continua segura porque só
+    // avaliamos bloqueado_ate para quem já provou conhecer a senha.
     if (adminAutenticado.bloqueado_ate && new Date(adminAutenticado.bloqueado_ate) > new Date()) {
       return res.status(423).json({
         erro: 'Conta bloqueada por muitas tentativas. Redefina sua senha para continuar.',
