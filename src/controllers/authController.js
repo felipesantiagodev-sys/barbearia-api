@@ -102,11 +102,46 @@ async function loginAdmin(req, res) {
     }
 
     if (!adminAutenticado) {
+      // Nenhuma das contas com esse email bateu a senha informada. Como não
+      // há tenant_id nesta etapa do fluxo (login é anterior ao contexto de
+      // tenant) para saber qual conta especificamente o usuário quis
+      // acessar, incrementamos tentativas_login_falhas em TODAS as contas
+      // candidatas com esse email — do contrário um atacante testando senha
+      // errada contra um email presente em várias barbearias nunca
+      // acionaria bloqueio em nenhuma delas.
+      for (const candidato of resultado.rows) {
+        const novasFalhas = candidato.tentativas_login_falhas + 1;
+        if (novasFalhas >= 5) {
+          await executarComoPlataforma(
+            `UPDATE usuario_admin SET tentativas_login_falhas = $1, bloqueado_ate = now() + interval '100 years' WHERE id = $2`,
+            [novasFalhas, candidato.id]
+          );
+        } else {
+          await executarComoPlataforma(
+            `UPDATE usuario_admin SET tentativas_login_falhas = $1 WHERE id = $2`,
+            [novasFalhas, candidato.id]
+          );
+        }
+      }
       return res.status(401).json({ erro: 'Email ou senha inválidos' });
+    }
+
+    if (adminAutenticado.bloqueado_ate && new Date(adminAutenticado.bloqueado_ate) > new Date()) {
+      return res.status(423).json({
+        erro: 'Conta bloqueada por muitas tentativas. Redefina sua senha para continuar.',
+        bloqueado: true,
+      });
     }
 
     if (!adminAutenticado.email_verificado) {
       return res.status(403).json({ erro: 'Confirme seu email antes de fazer login' });
+    }
+
+    if (adminAutenticado.tentativas_login_falhas > 0) {
+      await executarComoPlataforma(
+        `UPDATE usuario_admin SET tentativas_login_falhas = 0, bloqueado_ate = NULL WHERE id = $1`,
+        [adminAutenticado.id]
+      );
     }
 
     const token = jwt.sign(
@@ -212,7 +247,10 @@ async function redefinirSenhaAdmin(req, res) {
     const senha_hash = await bcrypt.hash(senha_nova, 10);
 
     await executarComoPlataforma(
-      `UPDATE usuario_admin SET senha_hash = $1, token_reset_senha = NULL, token_reset_senha_expira_em = NULL WHERE id = $2`,
+      `UPDATE usuario_admin
+       SET senha_hash = $1, token_reset_senha = NULL, token_reset_senha_expira_em = NULL,
+           tentativas_login_falhas = 0, bloqueado_ate = NULL
+       WHERE id = $2`,
       [senha_hash, admin.id]
     );
 

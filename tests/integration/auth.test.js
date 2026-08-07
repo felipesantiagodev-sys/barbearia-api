@@ -351,4 +351,86 @@ describe('Autenticação multi-tenant', () => {
       expect(resposta.status).toBe(400);
     });
   });
+
+  describe('Bloqueio de login por tentativas (admin)', () => {
+    test('bloqueia a conta após 5 senhas incorretas seguidas', async () => {
+      const barbearia = await criarBarbearia('Barbearia Bloqueio Admin');
+      await criarAdminDireto(barbearia.id, { email: 'admin.bloqueio@teste.com', senha: 'senhaCorreta123' });
+
+      for (let tentativa = 0; tentativa < 5; tentativa++) {
+        await request(app)
+          .post('/auth/admin/login')
+          .send({ email: 'admin.bloqueio@teste.com', senha: 'senhaErrada' });
+      }
+
+      const resposta = await request(app)
+        .post('/auth/admin/login')
+        .send({ email: 'admin.bloqueio@teste.com', senha: 'senhaCorreta123' });
+
+      expect(resposta.status).toBe(423);
+      expect(resposta.body.bloqueado).toBe(true);
+    });
+
+    test('senha correta antes da 5ª falha zera o contador', async () => {
+      const barbearia = await criarBarbearia('Barbearia Zera Contador Admin');
+      await criarAdminDireto(barbearia.id, { email: 'admin.zera@teste.com', senha: 'senhaCorreta123' });
+
+      for (let tentativa = 0; tentativa < 3; tentativa++) {
+        await request(app)
+          .post('/auth/admin/login')
+          .send({ email: 'admin.zera@teste.com', senha: 'senhaErrada' });
+      }
+
+      const loginCorreto = await request(app)
+        .post('/auth/admin/login')
+        .send({ email: 'admin.zera@teste.com', senha: 'senhaCorreta123' });
+      expect(loginCorreto.status).toBe(200);
+
+      for (let tentativa = 0; tentativa < 4; tentativa++) {
+        await request(app)
+          .post('/auth/admin/login')
+          .send({ email: 'admin.zera@teste.com', senha: 'senhaErrada' });
+      }
+
+      const resposta = await request(app)
+        .post('/auth/admin/login')
+        .send({ email: 'admin.zera@teste.com', senha: 'senhaCorreta123' });
+      expect(resposta.status).toBe(200);
+    });
+
+    test('redefinir senha desbloqueia a conta', async () => {
+      const barbearia = await criarBarbearia('Barbearia Desbloqueio Admin');
+      const admin = await criarAdminDireto(barbearia.id, { email: 'admin.desbloqueio@teste.com', senha: 'senhaAntiga123' });
+
+      for (let tentativa = 0; tentativa < 5; tentativa++) {
+        await request(app)
+          .post('/auth/admin/login')
+          .send({ email: 'admin.desbloqueio@teste.com', senha: 'senhaErrada' });
+      }
+
+      const token = 'c0000000-0000-4000-8000-000000000001';
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia.id)]);
+        await client.query(
+          `UPDATE usuario_admin SET token_reset_senha = $1, token_reset_senha_expira_em = now() + interval '1 hour' WHERE id = $2`,
+          [token, admin.id]
+        );
+        await client.query('COMMIT');
+      } finally {
+        client.release();
+      }
+
+      const redefinicao = await request(app)
+        .post('/auth/admin/redefinir-senha')
+        .send({ token, senha_nova: 'senhaNovaDesbloqueio123' });
+      expect(redefinicao.status).toBe(200);
+
+      const loginPosRedefinicao = await request(app)
+        .post('/auth/admin/login')
+        .send({ email: 'admin.desbloqueio@teste.com', senha: 'senhaNovaDesbloqueio123' });
+      expect(loginPosRedefinicao.status).toBe(200);
+    });
+  });
 });
