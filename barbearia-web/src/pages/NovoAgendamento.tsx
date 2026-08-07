@@ -41,7 +41,7 @@ export default function NovoAgendamento() {
   function aoEscolherUnidade(id: number) {
     setUnidadeId(id);
     setPasso('profissional');
-    listarBarbeiros().then(setBarbeiros).catch(() => setErro('Erro ao carregar profissionais'));
+    listarBarbeiros(id).then(setBarbeiros).catch(() => setErro('Erro ao carregar profissionais'));
   }
 
   function aoEscolherProfissional(id: number) {
@@ -92,9 +92,15 @@ export default function NovoAgendamento() {
     const barbeiroFinal = 'barbeiro_id' in horarioEscolhido ? horarioEscolhido.barbeiro_id : barbeiroId;
     if (!barbeiroFinal) return;
 
+    // Usa horário LOCAL (não UTC) para bater com `combinarDataHora` no
+    // backend (src/utils/agenda.js), que faz `new Date(`${data}T${hora}`)`
+    // sem sufixo de timezone -- o Node interpreta isso como horário local do
+    // servidor. Usar toISOString() aqui (UTC) causava um desvio de fuso: em
+    // servidor UTC-3, um slot exibido como "08:00" era salvo como "11:00".
+    const pad = (n: number) => String(n).padStart(2, '0');
     const dataHora = new Date(horarioEscolhido.inicio);
-    const data = dataHora.toISOString().slice(0, 10);
-    const horaInicio = dataHora.toISOString().slice(11, 16);
+    const data = `${dataHora.getFullYear()}-${pad(dataHora.getMonth() + 1)}-${pad(dataHora.getDate())}`;
+    const horaInicio = `${pad(dataHora.getHours())}:${pad(dataHora.getMinutes())}`;
 
     try {
       await criarAgendamento({

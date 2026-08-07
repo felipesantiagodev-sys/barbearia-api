@@ -59,7 +59,7 @@ describe('NovoAgendamento', () => {
     vi.spyOn(catalogoApi, 'listarUnidades').mockResolvedValue([
       { id: 1, nome: 'Unidade Centro', endereco: null, telefone: null },
     ]);
-    vi.spyOn(catalogoApi, 'listarBarbeiros').mockResolvedValue([
+    const mockListarBarbeiros = vi.spyOn(catalogoApi, 'listarBarbeiros').mockResolvedValue([
       { id: 2, nome: 'Barbeiro Teste', email: null, telefone: null, foto_url: null },
     ]);
     vi.spyOn(catalogoApi, 'listarServicosDoBarbeiro').mockResolvedValue([
@@ -87,7 +87,11 @@ describe('NovoAgendamento', () => {
     await userEvent.click(screen.getByText('Unidade Centro'));
 
     // Passo 2: profissional
+    // Finding 2 da revisão final de branch: listarBarbeiros deve ser chamado
+    // com a unidade escolhida no passo 1, para listar só os barbeiros dessa
+    // unidade (antes, a chamada não recebia nenhum argumento).
     await waitFor(() => expect(screen.getByText('Barbeiro Teste')).toBeInTheDocument());
+    expect(mockListarBarbeiros).toHaveBeenCalledWith(1);
     await userEvent.click(screen.getByText('Barbeiro Teste'));
 
     // Passo 3: serviços
@@ -107,6 +111,18 @@ describe('NovoAgendamento', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /confirmar/i })).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /confirmar/i }));
 
+    // Deriva data/hora_inicio esperados em horário LOCAL a partir do mesmo
+    // slot.inicio usado acima -- não fixamos "2026-08-10"/"10:00" porque o
+    // valor local depende do fuso do ambiente de teste (mesmo raciocínio do
+    // rotuloHorario acima). Isso reproduz exatamente o bug do Finding 1: sem
+    // essa asserção, um bug de timezone em aoConfirmar (usar toISOString()
+    // em vez de horário local) passava despercebido porque o teste só
+    // verificava cliente_id/barbeiro_id/unidade_id/servico_ids.
+    const inicioEsperado = new Date('2026-08-10T10:00:00.000Z');
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dataEsperada = `${inicioEsperado.getFullYear()}-${pad(inicioEsperado.getMonth() + 1)}-${pad(inicioEsperado.getDate())}`;
+    const horaInicioEsperada = `${pad(inicioEsperado.getHours())}:${pad(inicioEsperado.getMinutes())}`;
+
     await waitFor(() => {
       expect(mockCriar).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -114,6 +130,8 @@ describe('NovoAgendamento', () => {
           barbeiro_id: 2,
           unidade_id: 1,
           servico_ids: [3],
+          data: dataEsperada,
+          hora_inicio: horaInicioEsperada,
         })
       );
     });

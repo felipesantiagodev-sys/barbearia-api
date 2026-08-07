@@ -181,6 +181,67 @@ describe('agendamentoController com req.db', () => {
     // barbeiro_id/unidade_id/cliente_id/servico_ids (todos vindos do body)
     // pertencem à barbearia do admin autenticado. A FK ignora RLS, então sem
     // essa checagem seria possível criar um agendamento "misturando" tenants.
+    // Teste de round-trip do Finding 1 (revisão final de branch): pega um
+    // slot REAL de GET /agendamentos/horarios-disponiveis, converte
+    // `inicio` para `data`+`hora_inicio` em horário LOCAL (exatamente como
+    // o frontend deveria fazer em NovoAgendamento.tsx -- ver
+    // barbearia-web/src/pages/NovoAgendamento.tsx) e confirma que o
+    // `data_hora_inicio` armazenado no agendamento criado é EXATAMENTE
+    // igual ao `inicio` do slot original. `combinarDataHora`
+    // (src/utils/agenda.js) faz `new Date(`${data}T${hora}`)` sem sufixo de
+    // timezone -- interpretado como horário LOCAL do servidor -- então se o
+    // cliente enviasse data/hora derivados de toISOString() (UTC), esse
+    // teste pegaria a divergência (até 3h de desvio em servidor UTC-3).
+    test('data_hora_inicio do agendamento criado bate exatamente com o inicio do slot de disponibilidade', async () => {
+      const cenario = await montarCenario('Barbearia Round Trip');
+      const servico = await criarServicoDireto(cenario.barbearia.id, {
+        nome: 'Corte',
+        duracao_minutos: 30,
+        valor: 50,
+      });
+      await associarBarbeiroServico(cenario.barbeiro.id, servico.id);
+
+      const diaSemana = new Date().getDay();
+      await inserirDisponibilidadeDireto(cenario.barbearia.id, {
+        barbeiro_id: cenario.barbeiro.id,
+        dia_semana: diaSemana,
+        hora_inicio: '08:00',
+        hora_fim: '20:00',
+      });
+
+      const hoje = new Date().toISOString().slice(0, 10);
+
+      const respostaHorarios = await request(app).get(
+        `/agendamentos/horarios-disponiveis?barbeiro_id=${cenario.barbeiro.id}&data=${hoje}&duracao_minutos=30`
+      );
+      expect(respostaHorarios.status).toBe(200);
+      expect(respostaHorarios.body.length).toBeGreaterThan(0);
+
+      const slotEscolhido = respostaHorarios.body[0];
+      const inicioSlot = new Date(slotEscolhido.inicio);
+
+      // Conversão em horário LOCAL, igual ao que NovoAgendamento.tsx faz
+      // após a correção do Finding 1.
+      const pad = (n) => String(n).padStart(2, '0');
+      const dataLocal = `${inicioSlot.getFullYear()}-${pad(inicioSlot.getMonth() + 1)}-${pad(inicioSlot.getDate())}`;
+      const horaInicioLocal = `${pad(inicioSlot.getHours())}:${pad(inicioSlot.getMinutes())}`;
+
+      const criacao = await request(app)
+        .post('/agendamentos')
+        .set('Authorization', `Bearer ${cenario.token}`)
+        .send({
+          cliente_id: cenario.cliente.id,
+          barbeiro_id: cenario.barbeiro.id,
+          unidade_id: cenario.unidade.id,
+          data: dataLocal,
+          hora_inicio: horaInicioLocal,
+          servico_ids: [servico.id],
+        });
+
+      expect(criacao.status).toBe(201);
+      expect(new Date(criacao.body.data_hora_inicio).getTime()).toBe(inicioSlot.getTime());
+    });
+
     test('rejeita criação de agendamento com barbeiro_id de outra barbearia (404)', async () => {
       const cenarioA = await montarCenario('Barbearia A');
       const cenarioB = await montarCenario('Barbearia B');
