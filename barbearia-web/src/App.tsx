@@ -8,6 +8,7 @@ import RedefinirSenha from './pages/RedefinirSenha';
 import Home from './pages/Home';
 import NovoAgendamento from './pages/NovoAgendamento';
 import Agendamentos from './pages/Agendamentos';
+import Plano from './pages/Plano';
 import RotaProtegida from './components/RotaProtegida';
 
 function AreaComTema({ children }: { children: React.ReactNode }) {
@@ -46,6 +47,14 @@ function App() {
               element={
                 <RotaProtegida>
                   <Agendamentos />
+                </RotaProtegida>
+              }
+            />
+            <Route
+              path="/plano"
+              element={
+                <RotaProtegida>
+                  <Plano />
                 </RotaProtegida>
               }
             />

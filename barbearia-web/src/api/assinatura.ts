@@ -5,7 +5,7 @@ export interface Assinatura {
   status: string;
   data_inicio: string;
   proxima_cobranca: string | null;
-  plano: { nome: string; valor_mensal: number };
+  plano: { nome: string; valor_mensal: number; vantagens: string | null };
 }
 
 export function buscarMinhaAssinatura(): Promise<Assinatura | null> {

@@ -68,18 +68,19 @@ describe('Home', () => {
       status: 'ativa',
       data_inicio: '2026-01-01',
       proxima_cobranca: '2026-09-01',
-      plano: { nome: 'Plano Premium', valor_mensal: 149.9 },
+      plano: { nome: 'Plano Premium', valor_mensal: 149.9, vantagens: null },
     });
     vi.spyOn(agendamentoApi, 'listarMeusAgendamentos').mockResolvedValue([]);
 
     renderHome();
 
     await waitFor(() => {
-      expect(screen.getByText('Plano Premium')).toBeInTheDocument();
+      expect(screen.getByText(/Plano Premium/)).toBeInTheDocument();
     });
+    expect(screen.getByRole('link', { name: /detalhes sobre o plano/i })).toHaveAttribute('href', '/plano');
   });
 
-  test('não mostra bloco de plano quando o cliente não tem assinatura', async () => {
+  test('não mostra card de plano ativo quando o cliente não tem assinatura, mas o banner de planos continua visível', async () => {
     vi.spyOn(temaApi, 'buscarTema').mockResolvedValue({
       cor_primaria: '#000000',
       cor_fundo: '#FFFFFF',
@@ -93,7 +94,9 @@ describe('Home', () => {
     await waitFor(() => {
       expect(agendamentoApi.listarMeusAgendamentos).toHaveBeenCalled();
     });
-    expect(screen.queryByText(/plano/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/seu plano/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /detalhes sobre o plano/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /conheça nossos planos/i })).toHaveAttribute('href', '/plano');
   });
 
   test('lista os próximos agendamentos', async () => {

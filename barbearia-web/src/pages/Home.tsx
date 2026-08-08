@@ -32,39 +32,59 @@ export default function Home() {
       {usuario?.tipo === 'cliente' && (
         <>
           {assinatura && (
-            <div className={styles.cardPlano}>
-              <p className={styles.planoRotulo}>Seu plano</p>
-              <p className={styles.planoNome}>{assinatura.plano.nome}</p>
-              <p className={styles.planoValor}>
-                R$ {Number(assinatura.plano.valor_mensal).toFixed(2)}/mês
+            <div className={styles.cartaoPlano}>
+              <p className={styles.tituloCartao}>Seu plano</p>
+              <p className={styles.textoPlano}>
+                Você está aproveitando as vantagens do <strong>{assinatura.plano.nome}</strong>
               </p>
+              <Link className={styles.linkDetalhes} to="/plano">
+                Detalhes sobre o plano →
+              </Link>
             </div>
           )}
 
-          <nav className={styles.navegacao}>
-            <Link className={styles.linkNav} to="/novo-agendamento">
-              Novo agendamento
-            </Link>
-            <Link className={styles.linkNav} to="/agendamentos">
-              Meus agendamentos
-            </Link>
-          </nav>
+          <Link className={styles.banner} to="/plano">
+            <span>
+              <span className={styles.bannerTitulo}>Conheça nossos planos</span>
+              <span className={styles.bannerSubtitulo}>Aproveite vantagens exclusivas</span>
+            </span>
+            <span aria-hidden="true">→</span>
+          </Link>
 
           <div className={styles.secaoAgendamentos}>
-            <h2 className={styles.secaoTitulo}>Próximos agendamentos</h2>
+            <div className={styles.secaoCabecalho}>
+              <h2 className={styles.secaoTitulo}>Próximos agendamentos</h2>
+              <Link className={styles.linkVerTudo} to="/agendamentos">
+                Ver tudo
+              </Link>
+            </div>
 
             {proximosAgendamentos.length === 0 ? (
               <p className={styles.semAgendamentos}>Você ainda não tem agendamentos marcados.</p>
             ) : (
-              <ul className={styles.listaAgendamentos}>
+              <div className={styles.listaAgendamentos}>
                 {proximosAgendamentos.map((agendamento) => (
-                  <li key={agendamento.id} className={styles.itemAgendamento}>
-                    {new Date(agendamento.data_hora_inicio).toLocaleString('pt-BR')}
-                  </li>
+                  <div key={agendamento.id} className={styles.cartaoAgendamento}>
+                    <p className={styles.dataAgendamento}>
+                      {new Date(agendamento.data_hora_inicio).toLocaleString('pt-BR', {
+                        day: '2-digit',
+                        month: 'long',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                    <p className={styles.totalAgendamento}>
+                      Total: R$ {Number(agendamento.valor_total).toFixed(2)}
+                    </p>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
+
+          <Link className={styles.botaoNovoAgendamento} to="/novo-agendamento">
+            + Novo agendamento
+          </Link>
         </>
       )}
 

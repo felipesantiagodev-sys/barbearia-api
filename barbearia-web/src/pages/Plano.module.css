@@ -1,0 +1,73 @@
+.pagina {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.titulo {
+  font-family: var(--fonte-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.semPlano {
+  font-size: 0.875rem;
+  color: var(--plataforma-texto-secundario);
+}
+
+.cartao {
+  background: var(--plataforma-superficie);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+
+.nomePlano {
+  font-family: var(--fonte-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.vigencia {
+  font-size: 0.875rem;
+  color: var(--plataforma-texto-secundario);
+  margin-bottom: 1rem;
+}
+
+.valor {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+}
+
+.valorPeriodo {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--plataforma-texto-secundario);
+}
+
+.secaoVantagens {
+  border-top: 1px solid var(--plataforma-borda);
+  padding-top: 1rem;
+}
+
+.linkVantagens {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.listaVantagens {
+  margin-top: 0.75rem;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
