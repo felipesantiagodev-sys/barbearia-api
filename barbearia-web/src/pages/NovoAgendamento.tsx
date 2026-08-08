@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import MenuLateral from '../components/MenuLateral';
+import BotaoVoltar from '../components/BotaoVoltar';
 import { listarUnidades, listarBarbeiros, listarServicosDoBarbeiro, listarServicos, type Unidade, type Barbeiro, type Servico } from '../api/catalogo';
 import {
   buscarHorariosDisponiveis,
@@ -192,7 +193,7 @@ export default function NovoAgendamento() {
 
   return (
     <div className={styles.pagina}>
-      <MenuLateral />
+      <MenuLateral acaoSecundaria={<BotaoVoltar />} />
       <h1 className={styles.titulo}>Novo agendamento</h1>
 
       {erro && <p className={styles.erro}>{erro}</p>}

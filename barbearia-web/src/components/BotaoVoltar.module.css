@@ -1,0 +1,10 @@
+.botaoVoltar {
+  color: var(--plataforma-texto-secundario);
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.botaoVoltar:hover {
+  color: inherit;
+}

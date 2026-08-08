@@ -1,17 +1,25 @@
 .cabecalho {
-  max-width: 28rem;
-  margin: 0 auto;
-  padding: 1rem 1.5rem 0;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  height: 3.25rem;
+  padding: 0 1.5rem;
+  background: var(--plataforma-fundo);
+  border-bottom: 1px solid var(--plataforma-borda);
 }
 
 .botaoAbrir {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.375rem;
   line-height: 1;
   cursor: pointer;
   color: inherit;
-  padding: 0.25rem;
+  padding: 0.25rem 0.5rem 0.25rem 0;
 }
 
 .sobreposicao {

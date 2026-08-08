@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import MenuLateral from '../components/MenuLateral';
+import BotaoVoltar from '../components/BotaoVoltar';
 import { listarMeusAgendamentos, cancelarAgendamento, type Agendamento } from '../api/agendamento';
 import styles from './Agendamentos.module.css';
 
@@ -27,7 +28,7 @@ export default function Agendamentos() {
 
   return (
     <div className={styles.pagina}>
-      <MenuLateral />
+      <MenuLateral acaoSecundaria={<BotaoVoltar />} />
       <h1 className={styles.titulo}>Agendamentos</h1>
 
       <div className={styles.abas}>

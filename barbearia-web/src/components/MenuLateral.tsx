@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Marca from './Marca';
 import styles from './MenuLateral.module.css';
 
-export default function MenuLateral() {
+export default function MenuLateral({ acaoSecundaria }: { acaoSecundaria?: ReactNode }) {
   const { sair } = useAuth();
   const [aberto, setAberto] = useState(false);
 
@@ -23,6 +23,7 @@ export default function MenuLateral() {
         <button className={styles.botaoAbrir} onClick={() => setAberto(true)} aria-label="Abrir menu">
           ☰
         </button>
+        {acaoSecundaria}
       </header>
 
       {aberto && (
