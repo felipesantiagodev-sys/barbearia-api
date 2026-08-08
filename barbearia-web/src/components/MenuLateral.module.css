@@ -1,25 +1,24 @@
-.cabecalho {
-  position: sticky;
-  top: 0;
-  left: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-  height: 3.25rem;
-  padding: 0 1.5rem;
-  background: var(--plataforma-fundo);
-  border-bottom: 1px solid var(--plataforma-borda);
-}
-
 .botaoAbrir {
-  background: none;
-  border: none;
-  font-size: 1.375rem;
+  position: fixed;
+  top: 1.25rem;
+  left: 1.25rem;
+  z-index: 40;
+  background: var(--plataforma-superficie);
+  border: 1px solid var(--plataforma-borda);
+  border-radius: 0.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.25rem;
   line-height: 1;
   cursor: pointer;
   color: inherit;
-  padding: 0.25rem 0.5rem 0.25rem 0;
+}
+
+.acaoSecundaria {
+  position: fixed;
+  top: 1.375rem;
+  left: 4.5rem;
+  z-index: 40;
 }
 
 .sobreposicao {

@@ -19,12 +19,10 @@ export default function MenuLateral({ acaoSecundaria }: { acaoSecundaria?: React
 
   return (
     <>
-      <header className={styles.cabecalho}>
-        <button className={styles.botaoAbrir} onClick={() => setAberto(true)} aria-label="Abrir menu">
-          ☰
-        </button>
-        {acaoSecundaria}
-      </header>
+      <button className={styles.botaoAbrir} onClick={() => setAberto(true)} aria-label="Abrir menu">
+        ☰
+      </button>
+      {acaoSecundaria && <div className={styles.acaoSecundaria}>{acaoSecundaria}</div>}
 
       {aberto && (
         <div className={styles.sobreposicao} onClick={fechar}>
