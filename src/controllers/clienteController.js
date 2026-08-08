@@ -26,7 +26,16 @@ async function criarClientePublico(req, res) {
     return res.status(400).json({ erro: 'nome, email, senha e data_nascimento são obrigatórios' });
   }
 
-  const dataNascimentoParseada = new Date(data_nascimento);
+  // `new Date(data_nascimento)` sozinho é permissivo demais: aceita strings
+  // como "1995" (só ano), que o JS converte para uma data válida mas o
+  // Postgres rejeita com 22007 (invalid_datetime_format) na hora do INSERT.
+  // Validar o formato exato YYYY-MM-DD via regex ANTES de parsear garante
+  // que só chega ao banco algo que o Postgres também aceita como DATE.
+  if (typeof data_nascimento !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data_nascimento)) {
+    return res.status(400).json({ erro: 'data_nascimento deve estar no formato YYYY-MM-DD' });
+  }
+
+  const dataNascimentoParseada = new Date(`${data_nascimento}T00:00:00Z`);
   if (Number.isNaN(dataNascimentoParseada.getTime())) {
     return res.status(400).json({ erro: 'data_nascimento inválida' });
   }
@@ -41,6 +50,22 @@ async function criarClientePublico(req, res) {
 
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia_id)]);
+
+    // Defesa em profundidade: mesmo que o frontend já filtre pelo status da
+    // barbearia (ver `buscarTema`), o cadastro é um endpoint público e
+    // precisa recusar barbearias pendentes de verificação ou suspensas
+    // mesmo se alguém chamar a rota diretamente, sem passar pela checagem
+    // do link. Mensagem genérica de "não encontrada" propositalmente --
+    // não revelar a um visitante não autenticado que a barbearia existe mas
+    // está inativa.
+    const barbeariaResultado = await client.query(
+      "SELECT status FROM barbearia WHERE id = $1",
+      [barbearia_id]
+    );
+    if (barbeariaResultado.rows.length === 0 || barbeariaResultado.rows[0].status !== 'ativa') {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Barbearia não encontrada' });
+    }
 
     const resultado = await client.query(
       `INSERT INTO cliente (barbearia_id, nome, email, telefone, senha_hash, data_nascimento)
@@ -62,6 +87,9 @@ async function criarClientePublico(req, res) {
     }
     if (erro.code === '22P02') {
       return res.status(400).json({ erro: 'barbearia_id inválido' });
+    }
+    if (erro.code === '22007') {
+      return res.status(400).json({ erro: 'data_nascimento inválida' });
     }
     console.error(erro);
     res.status(500).json({ erro: 'Erro ao cadastrar cliente' });
