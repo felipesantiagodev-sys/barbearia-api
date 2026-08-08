@@ -40,6 +40,27 @@ describe('Tema por tenant', () => {
       const resposta = await request(app).get('/barbearias/999999/tema');
       expect(resposta.status).toBe(404);
     });
+
+    // Decisão de produto: o link de cadastro público só é considerado
+    // válido quando a barbearia está com status 'ativa'. Uma barbearia
+    // pendente de verificação ou suspensa deve responder exatamente como
+    // "não encontrada" (mesmo 404, mesma mensagem) -- não revelar a um
+    // visitante não autenticado que a barbearia existe mas está inativa.
+    test('retorna 404 para barbearia pendente de verificação', async () => {
+      const barbearia = await criarBarbearia('Barbearia Pendente', { status: 'pendente_verificacao' });
+
+      const resposta = await request(app).get(`/barbearias/${barbearia.id}/tema`);
+
+      expect(resposta.status).toBe(404);
+    });
+
+    test('retorna 404 para barbearia suspensa', async () => {
+      const barbearia = await criarBarbearia('Barbearia Suspensa', { status: 'suspensa' });
+
+      const resposta = await request(app).get(`/barbearias/${barbearia.id}/tema`);
+
+      expect(resposta.status).toBe(404);
+    });
   });
 
   describe('PUT /barbearias/:id/tema', () => {
