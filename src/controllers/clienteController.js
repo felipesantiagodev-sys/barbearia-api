@@ -50,17 +50,7 @@ async function criarClientePublico(req, res) {
 
     await client.query('COMMIT');
 
-    // O driver `pg` converte a coluna `date` para um objeto JS `Date`
-    // (meia-noite UTC); serializado direto em JSON via `res.json()` isso
-    // vira uma string ISO com horário (ex.: "1995-05-20T03:00:00.000Z" em
-    // horário local -03:00), quebrando o contrato `YYYY-MM-DD` da API.
-    // Normaliza para a data pura antes de responder.
-    const clienteCriado = {
-      ...resultado.rows[0],
-      data_nascimento: resultado.rows[0].data_nascimento.toISOString().slice(0, 10),
-    };
-
-    res.status(201).json(clienteCriado);
+    res.status(201).json(resultado.rows[0]);
   } catch (erro) {
     await client.query('ROLLBACK').catch(() => {});
 

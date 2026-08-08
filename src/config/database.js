@@ -1,5 +1,13 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 require('dotenv').config();
+
+// OID 1082 = tipo DATE do Postgres. Por padrão, o driver `pg` parseia DATE
+// como um objeto JS Date ancorado em meia-noite LOCAL do processo, o que
+// causa um bug de off-by-one-day ao serializar via toISOString() em
+// servidores rodando em fusos horários com offset positivo de UTC. Mantendo
+// a string crua (já no formato YYYY-MM-DD que o Postgres retorna) evitamos
+// essa ambiguidade de fuso por completo.
+types.setTypeParser(1082, (valor) => valor);
 
 // Mesmo padrão de `src/middlewares/tenant.js` e `tests/helpers/db.js`:
 // em NODE_ENV=test, conecta ao banco de teste (DB_NAME_TEST), não ao de
