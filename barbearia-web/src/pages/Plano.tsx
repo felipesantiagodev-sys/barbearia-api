@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import BotaoVoltar from '../components/BotaoVoltar';
+import MenuLateral from '../components/MenuLateral';
 import { buscarMinhaAssinatura, type Assinatura } from '../api/assinatura';
 import styles from './Plano.module.css';
 
@@ -17,7 +17,7 @@ export default function Plano() {
 
   return (
     <div className={styles.pagina}>
-      <BotaoVoltar />
+      <MenuLateral />
       <h1 className={styles.titulo}>Plano</h1>
 
       {!carregado && <p className={styles.semPlano}>Carregando...</p>}

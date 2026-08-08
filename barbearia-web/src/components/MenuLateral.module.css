@@ -1,0 +1,70 @@
+.cabecalho {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 0;
+}
+
+.botaoAbrir {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+  padding: 0.25rem;
+}
+
+.sobreposicao {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 60;
+  display: flex;
+}
+
+.menu {
+  width: 80%;
+  max-width: 18rem;
+  height: 100%;
+  background: var(--plataforma-fundo);
+  border-right: 1px solid var(--plataforma-borda);
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-y: auto;
+}
+
+.menuCabecalho {
+  margin-bottom: 1.5rem;
+}
+
+.item {
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  padding: 0.75rem 0.5rem;
+  border-radius: 0.5rem;
+}
+
+.item:hover {
+  background: var(--plataforma-superficie);
+}
+
+.itemSair {
+  margin-top: 1rem;
+  text-align: left;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--plataforma-borda);
+  padding: 1rem 0.5rem 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--plataforma-texto-secundario);
+  cursor: pointer;
+}
+
+.itemSair:hover {
+  color: inherit;
+}

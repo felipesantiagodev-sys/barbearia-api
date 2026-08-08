@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import MenuLateral from '../components/MenuLateral';
 import { buscarMinhaAssinatura, type Assinatura } from '../api/assinatura';
 import { listarMeusAgendamentos, type Agendamento } from '../api/agendamento';
 import styles from './Home.module.css';
 
 export default function Home() {
-  const { usuario, sair } = useAuth();
+  const { usuario } = useAuth();
   const [assinatura, setAssinatura] = useState<Assinatura | null>(null);
   const [proximosAgendamentos, setProximosAgendamentos] = useState<Agendamento[]>([]);
 
@@ -24,6 +25,7 @@ export default function Home() {
 
   return (
     <div className={styles.pagina}>
+      <MenuLateral />
       <div className={styles.cabecalho}>
         <h1 className={styles.saudacao}>Olá, {usuario?.nome}</h1>
         <p className={styles.papel}>{usuario?.tipo === 'admin' ? 'Administrador' : 'Cliente'}</p>
@@ -87,10 +89,6 @@ export default function Home() {
           </Link>
         </>
       )}
-
-      <button className={styles.botaoSair} onClick={sair}>
-        Sair
-      </button>
     </div>
   );
 }
