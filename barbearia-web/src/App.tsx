@@ -5,6 +5,7 @@ import LoginCliente from './pages/LoginCliente';
 import LoginAdmin from './pages/LoginAdmin';
 import RecuperarSenha from './pages/RecuperarSenha';
 import RedefinirSenha from './pages/RedefinirSenha';
+import CadastroCliente from './pages/CadastroCliente';
 import Home from './pages/Home';
 import NovoAgendamento from './pages/NovoAgendamento';
 import Agendamentos from './pages/Agendamentos';
@@ -26,6 +27,7 @@ function App() {
             <Route path="/admin/login" element={<LoginAdmin />} />
             <Route path="/recuperar-senha" element={<RecuperarSenha />} />
             <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+            <Route path="/cadastro/:barbeariaId" element={<CadastroCliente />} />
             <Route
               path="/"
               element={

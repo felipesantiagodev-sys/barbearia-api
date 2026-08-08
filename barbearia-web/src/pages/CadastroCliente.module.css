@@ -1,0 +1,15 @@
+.linkVoltar {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+.linkVoltar a {
+  color: var(--plataforma-texto);
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 0.8125rem;
+}
+
+.linkVoltar a:hover {
+  text-decoration: underline;
+}
