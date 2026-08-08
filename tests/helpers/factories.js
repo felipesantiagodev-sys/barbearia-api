@@ -138,14 +138,15 @@ async function criarPlanoDireto(barbearia_id, overrides = {}) {
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia_id)]);
     const r = await client.query(
-      `INSERT INTO plano (barbearia_id, nome, valor_mensal, desconto_servico_fora_plano, intervalo_minimo_dias)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO plano (barbearia_id, nome, valor_mensal, desconto_servico_fora_plano, intervalo_minimo_dias, vantagens)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [
         barbearia_id,
         overrides.nome || 'Plano Teste',
         overrides.valor_mensal !== undefined ? overrides.valor_mensal : 99.9,
         overrides.desconto_servico_fora_plano !== undefined ? overrides.desconto_servico_fora_plano : 10,
         overrides.intervalo_minimo_dias !== undefined ? overrides.intervalo_minimo_dias : 1,
+        overrides.vantagens !== undefined ? overrides.vantagens : null,
       ]
     );
     await client.query('COMMIT');

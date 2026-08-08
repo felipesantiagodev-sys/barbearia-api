@@ -109,7 +109,11 @@ describe('POST /barbearias/:barbearia_id/clientes', () => {
     test('retorna a assinatura ativa do cliente logado, com dados do plano', async () => {
       const barbearia = await criarBarbearia('Barbearia Assinatura');
       const cliente = await criarClienteDireto(barbearia.id, { email: 'cliente.assinatura@teste.com' });
-      const plano = await criarPlanoDireto(barbearia.id, { nome: 'Plano Premium', valor_mensal: 149.9 });
+      const plano = await criarPlanoDireto(barbearia.id, {
+        nome: 'Plano Premium',
+        valor_mensal: 149.9,
+        vantagens: 'Cortes ilimitados\nBarba grátis\nDesconto em produtos',
+      });
       await criarAssinaturaDireto(barbearia.id, cliente.id, plano.id);
 
       const token = jwt.sign(
@@ -125,6 +129,7 @@ describe('POST /barbearias/:barbearia_id/clientes', () => {
       expect(resposta.status).toBe(200);
       expect(resposta.body.plano.nome).toBe('Plano Premium');
       expect(Number(resposta.body.plano.valor_mensal)).toBe(149.9);
+      expect(resposta.body.plano.vantagens).toBe('Cortes ilimitados\nBarba grátis\nDesconto em produtos');
       expect(resposta.body.status).toBe('ativa');
     });
 

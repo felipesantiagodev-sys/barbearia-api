@@ -106,7 +106,7 @@ async function buscarMinhaAssinatura(req, res) {
 
   try {
     const resultado = await req.db.query(
-      `SELECT a.id, a.status, a.data_inicio, a.proxima_cobranca, p.nome AS plano_nome, p.valor_mensal
+      `SELECT a.id, a.status, a.data_inicio, a.proxima_cobranca, p.nome AS plano_nome, p.valor_mensal, p.vantagens AS plano_vantagens
        FROM assinatura a
        JOIN plano p ON p.id = a.plano_id
        WHERE a.cliente_id = $1 AND a.status = 'ativa'`,
@@ -123,7 +123,7 @@ async function buscarMinhaAssinatura(req, res) {
       status: linha.status,
       data_inicio: linha.data_inicio,
       proxima_cobranca: linha.proxima_cobranca,
-      plano: { nome: linha.plano_nome, valor_mensal: linha.valor_mensal },
+      plano: { nome: linha.plano_nome, valor_mensal: linha.valor_mensal, vantagens: linha.plano_vantagens },
     });
   } catch (erro) {
     console.error(erro);
