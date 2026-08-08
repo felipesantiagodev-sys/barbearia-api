@@ -20,10 +20,18 @@ const pool = require('../config/database');
 // e nos middlewares de tenant (`src/middlewares/tenant.js`).
 async function criarClientePublico(req, res) {
   const { barbearia_id } = req.params;
-  const { nome, email, senha, telefone } = req.body;
+  const { nome, email, senha, telefone, data_nascimento } = req.body;
 
-  if (!nome || !email || !senha) {
-    return res.status(400).json({ erro: 'nome, email e senha são obrigatórios' });
+  if (!nome || !email || !senha || !data_nascimento) {
+    return res.status(400).json({ erro: 'nome, email, senha e data_nascimento são obrigatórios' });
+  }
+
+  const dataNascimentoParseada = new Date(data_nascimento);
+  if (Number.isNaN(dataNascimentoParseada.getTime())) {
+    return res.status(400).json({ erro: 'data_nascimento inválida' });
+  }
+  if (dataNascimentoParseada.getTime() > Date.now()) {
+    return res.status(400).json({ erro: 'data_nascimento não pode estar no futuro' });
   }
 
   const client = await pool.connect();
@@ -35,14 +43,24 @@ async function criarClientePublico(req, res) {
     await client.query("SELECT set_config('app.tenant_id', $1, true)", [String(barbearia_id)]);
 
     const resultado = await client.query(
-      `INSERT INTO cliente (barbearia_id, nome, email, telefone, senha_hash)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id, nome, email, telefone, criado_em`,
-      [barbearia_id, nome, email, telefone, senha_hash]
+      `INSERT INTO cliente (barbearia_id, nome, email, telefone, senha_hash, data_nascimento)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, nome, email, telefone, data_nascimento, criado_em`,
+      [barbearia_id, nome, email, telefone, senha_hash, data_nascimento]
     );
 
     await client.query('COMMIT');
 
-    res.status(201).json(resultado.rows[0]);
+    // O driver `pg` converte a coluna `date` para um objeto JS `Date`
+    // (meia-noite UTC); serializado direto em JSON via `res.json()` isso
+    // vira uma string ISO com horário (ex.: "1995-05-20T03:00:00.000Z" em
+    // horário local -03:00), quebrando o contrato `YYYY-MM-DD` da API.
+    // Normaliza para a data pura antes de responder.
+    const clienteCriado = {
+      ...resultado.rows[0],
+      data_nascimento: resultado.rows[0].data_nascimento.toISOString().slice(0, 10),
+    };
+
+    res.status(201).json(clienteCriado);
   } catch (erro) {
     await client.query('ROLLBACK').catch(() => {});
 

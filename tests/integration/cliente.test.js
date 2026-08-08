@@ -23,7 +23,13 @@ describe('POST /barbearias/:barbearia_id/clientes', () => {
 
     const resposta = await request(app)
       .post(`/barbearias/${barbeariaA.id}/clientes`)
-      .send({ barbearia_id: barbeariaB.id, nome: 'Cliente Novo', email: 'novo@teste.com', senha: 'senha123' });
+      .send({
+        barbearia_id: barbeariaB.id,
+        nome: 'Cliente Novo',
+        email: 'novo@teste.com',
+        senha: 'senha123',
+        data_nascimento: '1990-01-01',
+      });
 
     expect(resposta.status).toBe(201);
     expect(resposta.body.nome).toBe('Cliente Novo');
@@ -35,7 +41,13 @@ describe('POST /barbearias/:barbearia_id/clientes', () => {
 
     const resposta = await request(app)
       .post(`/barbearias/${barbeariaA.id}/clientes`)
-      .send({ barbearia_id: barbeariaB.id, nome: 'Cliente Novo', email: 'novo2@teste.com', senha: 'senha123' });
+      .send({
+        barbearia_id: barbeariaB.id,
+        nome: 'Cliente Novo',
+        email: 'novo2@teste.com',
+        senha: 'senha123',
+        data_nascimento: '1990-01-01',
+      });
 
     expect(resposta.status).toBe(201);
 
@@ -72,11 +84,21 @@ describe('POST /barbearias/:barbearia_id/clientes', () => {
 
     await request(app)
       .post(`/barbearias/${barbeariaA.id}/clientes`)
-      .send({ nome: 'Cliente Um', email: 'duplicado@teste.com', senha: 'senha123' });
+      .send({
+        nome: 'Cliente Um',
+        email: 'duplicado@teste.com',
+        senha: 'senha123',
+        data_nascimento: '1990-01-01',
+      });
 
     const resposta = await request(app)
       .post(`/barbearias/${barbeariaA.id}/clientes`)
-      .send({ nome: 'Cliente Dois', email: 'duplicado@teste.com', senha: 'senha123' });
+      .send({
+        nome: 'Cliente Dois',
+        email: 'duplicado@teste.com',
+        senha: 'senha123',
+        data_nascimento: '1990-01-01',
+      });
 
     expect(resposta.status).toBe(409);
   });
@@ -84,7 +106,12 @@ describe('POST /barbearias/:barbearia_id/clientes', () => {
   test('retorna 404 quando a barbearia da URL não existe', async () => {
     const resposta = await request(app)
       .post('/barbearias/999999/clientes')
-      .send({ nome: 'Cliente Fantasma', email: 'fantasma@teste.com', senha: 'senha123' });
+      .send({
+        nome: 'Cliente Fantasma',
+        email: 'fantasma@teste.com',
+        senha: 'senha123',
+        data_nascimento: '1990-01-01',
+      });
 
     expect(resposta.status).toBe(404);
   });
@@ -93,6 +120,67 @@ describe('POST /barbearias/:barbearia_id/clientes', () => {
     const resposta = await request(app)
       .post('/barbearias/abc/clientes')
       .send({ nome: 'Cliente Inválido', email: 'invalido@teste.com', senha: 'senha123' });
+
+    expect(resposta.status).toBe(400);
+  });
+
+  test('cadastra cliente com data_nascimento válida', async () => {
+    const barbearia = await criarBarbearia('Barbearia Data Nascimento');
+
+    const resposta = await request(app)
+      .post(`/barbearias/${barbearia.id}/clientes`)
+      .send({
+        nome: 'Cliente Com Data',
+        email: 'comdata@teste.com',
+        senha: 'senha123',
+        data_nascimento: '1995-05-20',
+      });
+
+    expect(resposta.status).toBe(201);
+    expect(resposta.body.data_nascimento).toBe('1995-05-20');
+  });
+
+  test('retorna 400 quando data_nascimento está no futuro', async () => {
+    const barbearia = await criarBarbearia('Barbearia Data Futura');
+    const anoFuturo = new Date().getFullYear() + 1;
+
+    const resposta = await request(app)
+      .post(`/barbearias/${barbearia.id}/clientes`)
+      .send({
+        nome: 'Cliente Data Futura',
+        email: 'datafutura@teste.com',
+        senha: 'senha123',
+        data_nascimento: `${anoFuturo}-01-01`,
+      });
+
+    expect(resposta.status).toBe(400);
+  });
+
+  test('retorna 400 quando data_nascimento é uma string inválida', async () => {
+    const barbearia = await criarBarbearia('Barbearia Data Invalida');
+
+    const resposta = await request(app)
+      .post(`/barbearias/${barbearia.id}/clientes`)
+      .send({
+        nome: 'Cliente Data Invalida',
+        email: 'datainvalida@teste.com',
+        senha: 'senha123',
+        data_nascimento: 'não-é-uma-data',
+      });
+
+    expect(resposta.status).toBe(400);
+  });
+
+  test('retorna 400 quando data_nascimento está ausente', async () => {
+    const barbearia = await criarBarbearia('Barbearia Sem Data');
+
+    const resposta = await request(app)
+      .post(`/barbearias/${barbearia.id}/clientes`)
+      .send({
+        nome: 'Cliente Sem Data',
+        email: 'semdata@teste.com',
+        senha: 'senha123',
+      });
 
     expect(resposta.status).toBe(400);
   });
