@@ -6,8 +6,16 @@ async function buscarTema(req, res) {
   const { id } = req.params;
 
   try {
+    // Além de existir, a barbearia precisa estar com status 'ativa' para
+    // que o link de cadastro público seja considerado válido (usado tanto
+    // pelo formulário de cadastro público quanto, após login, pela Home do
+    // app do cliente via TemaContext -- na prática só clientes de barbearias
+    // já ativas se cadastram, então essa checagem extra não afeta esse
+    // segundo uso). Barbearia pendente de verificação ou suspensa responde
+    // exatamente como "não encontrada" (mesma mensagem), para não vazar a um
+    // visitante não autenticado que a barbearia existe mas está inativa.
     const resultado = await pool.query(
-      'SELECT cor_primaria, cor_fundo, cor_secundaria FROM barbearia WHERE id = $1',
+      "SELECT cor_primaria, cor_fundo, cor_secundaria FROM barbearia WHERE id = $1 AND status = 'ativa'",
       [id]
     );
 

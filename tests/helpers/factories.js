@@ -1,12 +1,17 @@
 const bcrypt = require('bcrypt');
 const { pool } = require('./db');
 
-async function criarBarbearia(nome = 'Barbearia Teste') {
+async function criarBarbearia(nome = 'Barbearia Teste', overrides = {}) {
   // `barbearia` não tem barbearia_id (não está entre as 15 tabelas com RLS
   // da migration 005), então este INSERT não é afetado por RLS.
+  // `status` default 'ativa' preserva o comportamento anterior de todos os
+  // testes existentes que chamam esta factory sem se preocupar com status
+  // (mesmo default da migration 009); overrides.status permite criar
+  // barbearias 'pendente_verificacao'/'suspensa' para testar as checagens
+  // de status em buscarTema/criarClientePublico.
   const r = await pool.query(
-    'INSERT INTO barbearia (nome, cnpj) VALUES ($1, $2) RETURNING *',
-    [nome, '00000000000100']
+    'INSERT INTO barbearia (nome, cnpj, status) VALUES ($1, $2, $3) RETURNING *',
+    [nome, '00000000000100', overrides.status || 'ativa']
   );
   return r.rows[0];
 }
